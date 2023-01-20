@@ -1,3 +1,5 @@
+#define DEBUG
+
 using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
@@ -5,6 +7,7 @@ using Oxide.Game.Rust.Cui;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using static Oxide.Plugins.UiBuilderLibrary.Element.Instance;
 
 namespace Oxide.Plugins
 {
@@ -267,16 +270,16 @@ namespace Oxide.Plugins
       public static readonly string FontMono = "droidsansmono.ttf";
       public static readonly string FontMarker = "permanentmarker.ttf";
 
-      private PanelElement Root { get; }
+      private RootElement Root { get; }
 
       /// <summary>
       /// Create a new UI.
       /// </summary>
       /// <param name="parentId">The parent of this UI. For top-level UIs, one of: "Overlay", "Hud.Menu", "Hud" or "Under"</param>
       /// <param name="rootBuilder">Callback function that builds the UI.</param>
-      public UI(string parentId, Element.BuildUiFor<PanelElement> rootBuilder)
+      public UI(string parentId, RootElement.RenderUi rootBuilder)
       {
-        Root = new PanelElement(parentId, rootBuilder);
+        Root = new RootElement(parentId, rootBuilder);
         AllUis.Add(new WeakReference<UI>(this));
       }
 
@@ -310,8 +313,9 @@ namespace Oxide.Plugins
       /// <param name="player"></param>
       public void Open(BasePlayer player)
       {
-        var updatedElements = new List<Element>();
+        var updatedElements = new List<Element.Instance>();
         Root.Build(player, updatedElements, false);
+        var root = Root.GetInstance<RootElement.Instance>(player);
 
         var roots = GetRootElements(updatedElements);
         var jsonObjects = updatedElements.SelectMany(element => ToJson(element, roots)).ToArray();
@@ -323,6 +327,7 @@ namespace Oxide.Plugins
 
         var json = $"[{string.Join(",", jsonObjects)}]";
         CuiHelper.AddUi(player, json);
+        root.Open = true;
       }
 
       /// <summary>
@@ -331,8 +336,13 @@ namespace Oxide.Plugins
       /// <param name="player"></param>
       public void Close(BasePlayer player)
       {
-        Clear(player);
-        CuiHelper.DestroyUi(player, Root.Id);
+        var root = Root.GetInstance<RootElement.Instance>(player);
+        if (root == null)
+          return;
+
+        root.Clear();
+        CuiHelper.DestroyUi(player, root.Id);
+        root.Open = false;
       }
 
       /// <summary>
@@ -366,6 +376,17 @@ namespace Oxide.Plugins
       }
 
       /// <summary>
+      /// Set the Screen Aspect Ratio for the given player.
+      /// </summary>
+      /// <param name="player"></param>
+      /// <param name="value"></param>
+      /// <returns></returns>
+      public static void SetScreenAspectRatio(BasePlayer player, double value)
+      {
+        SelfRef.SetScreenAspectRatio(player, value);
+      }
+
+      /// <summary>
       /// Get the Render Scale for the given player.
       /// </summary>
       /// <param name="player"></param>
@@ -376,12 +397,23 @@ namespace Oxide.Plugins
       }
 
       /// <summary>
+      /// Set the Render Scale for the given player.
+      /// </summary>
+      /// <param name="player"></param>
+      /// <param name="value"></param>
+      /// <returns></returns>
+      public static void SetRenderScale(BasePlayer player, double value)
+      {
+        SelfRef.SetRenderScale(player, value);
+      }
+
+      /// <summary>
       /// Get a JSON representation of the given Element.
       /// </summary>
       /// <param name="element">What to encode.</param>
       /// <param name="roots">List of the root element ids.</param>
       /// <returns></returns>
-      private static IEnumerable<string> ToJson(Element element, HashSet<string> roots)
+      private static IEnumerable<string> ToJson(Element.Instance element, HashSet<string> roots)
       {
         var cuiElements = element.GetCuiElements();
 
@@ -407,7 +439,7 @@ namespace Oxide.Plugins
       /// </summary>
       /// <param name="elements"></param>
       /// <returns></returns>
-      private static HashSet<string> GetRootElements(IEnumerable<Element> elements)
+      private static HashSet<string> GetRootElements(IEnumerable<Element.Instance> elements)
       {
         var names = new HashSet<string>(elements.Select(element => element.Id));
         return new HashSet<string>(elements.Where(element => !names.Contains(element.GetParentId())).Select(element => element.Id));
@@ -419,136 +451,44 @@ namespace Oxide.Plugins
     /// </summary>
     public abstract class Element
     {
-      /// <summary>
-      /// The same as `BuildUiFor` but allows for obmitting the player from the callback definition.
-      /// </summary>
-      /// <see cref="BuildUiFor"/>
-      public delegate bool BuildUi<in T>(T self) where T : Element;
-
-      /// <summary>
-      /// Build an Element for the given player.
-      /// </summary>
-      /// <typeparam name="T">The type of element being built.</typeparam>
-      /// <param name="element">The element being built.</param>
-      /// <param name="player">The player the element is being built for.</param>
-      /// <returns>True iff the UI element needs to be refreshed on player's screen.</returns>
-      public delegate bool BuildUiFor<in T>(T element, BasePlayer player) where T : Element;
-
-      public string Id { get; }
-
-      public bool Visible = true;
+      protected readonly Dictionary<ulong, Instance> InstanceCache = new Dictionary<ulong, Instance>();
 
       // `Parent` should be null if `ParentId` is set.
       private readonly string ParentId;
 
       private readonly Element Parent;
-      protected readonly List<Element> Children = new List<Element>();
 
-      protected bool Initialized = false;
-      private readonly HashSet<ulong> OpenFor = new HashSet<ulong>();
-      private int BuildingChildIndex = 0;
-
-      public BoundingBox Bounds { get; }
-
-      public Element(Element parent)
+      internal Element(Element parent)
       {
-        Id = CuiHelper.GetGuid();
         Parent = parent;
         ParentId = null;
-        Bounds = new BoundingBox(Parent);
       }
 
-      public Element(string parentId)
+      internal Element(string parentId)
       {
-        Id = CuiHelper.GetGuid();
         Parent = null;
         ParentId = parentId;
-        Bounds = new BoundingBox(Parent);
       }
 
       /// <summary>
-      /// Get the id of this element's parent.
+      /// Get the instance of this element for the given player.
       /// </summary>
+      /// <param name="player"></param>
       /// <returns></returns>
-      public string GetParentId()
+      public T GetInstance<T>(BasePlayer player) where T : Instance
       {
-        return Parent?.Id ?? ParentId;
+        Instance instance = null;
+        return InstanceCache.TryGetValue(player.userID, out instance) ? (T)instance : null;
       }
 
       /// <summary>
-      /// Add a child to this element.
-      /// If the element has already been initialized, use the other version of this function.
-      /// </summary>
-      /// <param name="element"></param>
-      protected void AddChild(Element element)
-      {
-#if DEBUG
-        if (Initialized)
-          throw new Exception("Cannot add child once initialized.");
-        if (element == null)
-          throw new Exception("Cannot add null as child.");
-        if (element == this)
-          throw new Exception("Cannot add self as child.");
-#endif
-
-        Children.Add(element);
-      }
-
-      /// <summary>
-      /// Mark that a child has been added to this element.
-      /// If the element has not yet been initialized, use the other version of this function.
-      /// </summary>
-      /// <typeparam name="T">The type of the child.</typeparam>
-      /// <returns>The child.</returns>
-      protected T AddChild<T>() where T : Element
-      {
-#if DEBUG
-        if (!Initialized)
-          throw new Exception("Not yet initialized.");
-#endif
-
-        var element = (T)Children[BuildingChildIndex];
-        BuildingChildIndex++;
-        return element;
-      }
-
-      /// <summary>
-      /// Build this element and its children.
+      /// Build this element for the given player.
       /// </summary>
       /// <param name="player"></param>
       /// <param name="updatedElements"></param>
       /// <param name="parentHasUpdates"></param>
       /// <exception cref="Exception"></exception>
-      public void Build(BasePlayer player, List<Element> updatedElements, bool parentHasUpdates)
-      {
-        parentHasUpdates = parentHasUpdates || !OpenFor.Contains(player.userID);
-
-        BuildingChildIndex = 0;
-
-        var hasUpdates = DoBuild(player) || parentHasUpdates;
-
-        if (hasUpdates)
-          updatedElements.Add(this);
-
-#if DEBUG
-        if (Initialized && Visible && BuildingChildIndex != Children.Count)
-          throw new Exception($"[{GetType().Name}] Different number of children after update ({Children.Count} => {BuildingChildIndex}).");
-#endif
-
-        if (Visible)
-          foreach (var child in Children)
-            child.Build(player, updatedElements, hasUpdates);
-
-        OpenFor.Add(player.userID);
-        Initialized = true;
-      }
-
-      /// <summary>
-      /// Build this element.
-      /// </summary>
-      /// <param name="player"></param>
-      /// <returns></returns>
-      public abstract bool DoBuild(BasePlayer player);
+      public abstract void Build(BasePlayer player, List<Instance> updatedElements, bool parentHasUpdates);
 
       /// <summary>
       /// Clear any internally stored data for this player.
@@ -556,44 +496,170 @@ namespace Oxide.Plugins
       /// <param name="player"></param>
       public void Clear(BasePlayer player)
       {
-        foreach (var child in Children)
-          child.Clear(player);
+        if (!InstanceCache.ContainsKey(player.userID))
+          return;
 
-        OpenFor.Remove(player.userID);
+        InstanceCache[player.userID].Clear();
+        InstanceCache.Remove(player.userID);
       }
 
       /// <summary>
-      /// Get all the CuiElements for this element.
+      /// An instance of the element for an indiviual player.
       /// </summary>
-      /// <returns></returns>
-      public IEnumerable<CuiElement> GetCuiElements()
+      public abstract class Instance
       {
-        var parentId = Parent?.Id ?? ParentId;
-#if DEBUG
-        if (parentId == null)
-          throw new Exception("Element doesn't have parent.");
-#endif
-        return GetCuiElements(parentId);
-      }
+        /// <summary>
+        /// Build an Element for the given player.
+        /// </summary>
+        /// <typeparam name="T">The type of instance being rendered.</typeparam>
+        /// <param name="instance">The instance being rendered.</param>
+        /// <returns>True iff the UI element needs to be refreshed on player's screen.</returns>
+        public delegate bool RenderUi<in T>(T instance) where T : Instance;
 
-      /// <summary>
-      /// Get all the CuiElements for this element using the given parent id.
-      /// </summary>
-      /// <returns></returns>
-      protected internal abstract IEnumerable<CuiElement> GetCuiElements(string parentId);
+        public string Id { get; }
+
+        protected readonly Element Element;
+        protected readonly Instance Parent;
+        public BasePlayer Player { get; private set; }
+        public BoundingBox Bounds { get; private set; }
+        public bool Visible { get; set; } = true;
+
+        protected readonly List<Element> Children = new List<Element>();
+        private int BuildingChildIndex = 0;
+        internal bool Initialized;
+
+        public Instance(Element element, BasePlayer player)
+        {
+          Id = CuiHelper.GetGuid();
+          Element = element;
+          Player = player;
+          Parent = Element.Parent == null ? null : Element.Parent.GetInstance<Instance>(Player);
+          Bounds = new BoundingBox(Parent);
+          Initialized = false;
+        }
+
+        /// <summary>
+        /// Get the id of this element's parent.
+        /// </summary>
+        /// <returns></returns>
+        public string GetParentId()
+        {
+          return Parent?.Id ?? Element.ParentId;
+        }
+
+        public bool IsOpen()
+        {
+          return IsOpen(this);
+        }
+
+        private bool IsOpen(Instance instance)
+        {
+          if (instance == null)
+            return false;
+
+          if (instance.GetType() != typeof(RootElement.Instance))
+            return IsOpen(instance.Element.Parent.GetInstance<Instance>(Player));
+
+          var root = (RootElement.Instance)instance;
+          return root.Open;
+        }
+
+        /// <summary>
+        /// Build this element instance and its children.
+        /// </summary>
+        /// <param name="player"></param>
+        /// <param name="updatedElements"></param>
+        /// <param name="parentHasUpdates"></param>
+        /// <exception cref="Exception"></exception>
+        public void Build(List<Instance> updatedElements, bool parentHasUpdates)
+        {
+          BuildingChildIndex = 0;
+          var hasUpdates = Render() || parentHasUpdates || !IsOpen();
+
+          if (hasUpdates)
+            updatedElements.Add(this);
+
+#if DEBUG
+          if (Initialized && Visible && BuildingChildIndex != Children.Count)
+            throw new Exception($"[{GetType().FullName}] Different number of children after update ({Children.Count} => {BuildingChildIndex}).");
+#endif
+
+          if (Visible)
+            foreach (var child in Children)
+              child.Build(Player, updatedElements, hasUpdates);
+
+          Initialized = true;
+        }
+
+        /// <summary>
+        /// Render this element.
+        /// </summary>
+        /// <param name="player"></param>
+        /// <returns></returns>
+        public abstract bool Render();
+
+        /// <summary>
+        /// Clear any internally stored data.
+        /// </summary>
+        public void Clear()
+        {
+          foreach (var child in Children)
+            child.Clear(Player);
+        }
+
+        /// <summary>
+        /// Add a child to this element.
+        /// If the element has already been initialized, use the other version of this function.
+        /// </summary>
+        /// <param name="element"></param>
+        protected T AddChild<T>(T element) where T : Element
+        {
+#if DEBUG
+          if (Initialized)
+            throw new Exception("Cannot add child once initialized.");
+          if (element == null)
+            throw new Exception("Cannot add null as child.");
+#endif
+
+          Children.Add(element);
+          return element;
+        }
+
+        /// <summary>
+        /// Mark that a child has been added to this element.
+        /// If the element has not yet been initialized, use the other version of this function.
+        /// </summary>
+        /// <typeparam name="T">The type of the child.</typeparam>
+        /// <returns>The child.</returns>
+        protected T AddChild<T>() where T : Element
+        {
+#if DEBUG
+          if (!Initialized)
+            throw new Exception("Not yet initialized.");
+#endif
+
+          var element = (T)Children[BuildingChildIndex];
+          BuildingChildIndex++;
+          return element;
+        }
+
+        /// <summary>
+        /// Get all the CuiElements for this element.
+        /// </summary>
+        /// <returns></returns>
+        public abstract IEnumerable<CuiElement> GetCuiElements();
+      }
 
       public class BoundingBox
       {
-        private readonly Element Parent;
+        private readonly Instance Parent;
 
         public double MinX { get; set; } = 0;
         public double MinY { get; set; } = 0;
         public double MaxX { get; set; } = 1;
         public double MaxY { get; set; } = 1;
 
-        private readonly CuiRectTransformComponent cui = new CuiRectTransformComponent();
-
-        public BoundingBox(Element parent)
+        public BoundingBox(Instance parent)
         {
           Parent = parent;
         }
@@ -660,9 +726,59 @@ namespace Oxide.Plugins
         /// <returns></returns>
         public CuiRectTransformComponent GetCuiComponent()
         {
-          cui.AnchorMin = $"{MinX} {MinY}";
-          cui.AnchorMax = $"{MaxX} {MaxY}";
-          return cui;
+          return new CuiRectTransformComponent()
+          {
+            AnchorMin = $"{MinX} {MinY}",
+            AnchorMax = $"{MaxX} {MaxY}",
+          };
+        }
+      }
+    }
+
+    /// <summary>
+    /// The top level element.
+    /// </summary>
+    public class RootElement : PanelElement
+    {
+      public delegate bool RenderUi(Instance panel, BasePlayer player);
+
+      protected internal RenderUi Renderer;
+
+      internal RootElement(string parentId, RenderUi renderer) : base(parentId)
+      {
+        Renderer = renderer;
+      }
+
+      public Instance GetOrCreateInstance(BasePlayer player)
+      {
+        return GetInstance<Instance>(player) ?? new Instance(this, player);
+      }
+
+      /// <summary>
+      /// Build this element for the given player.
+      /// </summary>
+      /// <param name="player"></param>
+      /// <param name="updatedElements"></param>
+      /// <param name="parentHasUpdates"></param>
+      /// <exception cref="Exception"></exception>
+      public override void Build(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
+      {
+        InstanceCache[player.userID] = GetOrCreateInstance(player);
+        InstanceCache[player.userID].Build(updatedElements, parentHasUpdates);
+      }
+
+      public new class Instance : PanelElement.Instance
+      {
+        internal bool Open = false;
+
+        internal Instance(Element element, BasePlayer player) : base(element, player, null)
+        {
+        }
+
+        public override bool Render()
+        {
+          var renderer = ((RootElement)Element).Renderer;
+          return renderer(this, Player);
         }
       }
     }
@@ -672,172 +788,117 @@ namespace Oxide.Plugins
     /// </summary>
     public class PanelElement : Element
     {
-      public readonly CuiImageComponent Image = new CuiImageComponent();
-      public bool CursorEnabled = false;
-      public bool KeyboardEnabled = false;
-
-      protected internal BuildUiFor<PanelElement> BuilderFor { get; set; }
-
-      internal PanelElement(Element parent, BuildUi<PanelElement> builder) : this(parent, (self, player) => builder(self))
+      internal PanelElement(Element parent) : base(parent)
       {
       }
 
-      internal PanelElement(Element parent, BuildUiFor<PanelElement> builder) : base(parent)
-      {
-        BuilderFor = builder;
-      }
-
-      internal PanelElement(string parentId, BuildUi<PanelElement> builder) : this(parentId, (self, player) => builder(self))
+      internal PanelElement(string parentId) : base(parentId)
       {
       }
 
-      internal PanelElement(string parentId, BuildUiFor<PanelElement> builder) : base(parentId)
+      public Instance GetOrCreateInstance(BasePlayer player, RenderUi<Instance> renderer)
       {
-        BuilderFor = builder;
+        var instance = GetInstance<Instance>(player);
+        if (instance == null)
+          instance = new Instance(this, player, renderer);
+        else
+          instance.Renderer = renderer;
+
+        InstanceCache[player.userID] = instance;
+        return instance;
       }
 
-      protected internal override IEnumerable<CuiElement> GetCuiElements(string parentId)
+      /// <summary>
+      /// Build this element for the given player.
+      /// </summary>
+      /// <param name="player"></param>
+      /// <param name="updatedElements"></param>
+      /// <param name="parentHasUpdates"></param>
+      /// <exception cref="Exception"></exception>
+      public override void Build(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
       {
-        CuiElement cuiElement = new CuiElement()
+        InstanceCache[player.userID].Build(updatedElements, parentHasUpdates);
+      }
+
+      public new class Instance : Element.Instance
+      {
+        public readonly CuiImageComponent Image = new CuiImageComponent();
+        public bool CursorEnabled = false;
+        public bool KeyboardEnabled = false;
+
+        protected internal RenderUi<Instance> Renderer { get; set; }
+
+        internal Instance(Element element, BasePlayer player, RenderUi<Instance> renderer) : base(element, player)
         {
-          Name = Id,
-          Parent = parentId,
-        };
-
-        cuiElement.Components.Add(Image);
-        cuiElement.Components.Add(Bounds.GetCuiComponent());
-
-        if (CursorEnabled)
-          cuiElement.Components.Add(new CuiNeedsCursorComponent());
-
-        if (KeyboardEnabled)
-          cuiElement.Components.Add(new CuiNeedsKeyboardComponent());
-
-        return new CuiElement[] { cuiElement };
-      }
-
-      public override bool DoBuild(BasePlayer player)
-      {
-        return BuilderFor(this, player);
-      }
-
-      public void AddPanel(BuildUi<PanelElement> builder)
-      {
-        AddPanel((self, player) => builder(self));
-      }
-
-      public void AddPanel(BuildUiFor<PanelElement> builder)
-      {
-        if (Initialized)
-        {
-          var element = AddChild<PanelElement>();
-          element.BuilderFor = builder;
-          return;
+          Renderer = renderer;
         }
 
-        AddChild(new PanelElement(this, builder));
-      }
-
-      public void AddGameImage(BuildUi<GameImageElement> builder)
-      {
-        AddGameImage((self, player) => builder(self));
-      }
-
-      public void AddGameImage(BuildUiFor<GameImageElement> builder)
-      {
-        if (Initialized)
+        public override bool Render()
         {
-          var element = AddChild<GameImageElement>();
-          element.BuilderFor = builder;
-          return;
+          return Renderer(this);
         }
 
-        AddChild(new GameImageElement(this, builder));
-      }
-
-      public void AddRawImage(BuildUi<RawImageElement> builder)
-      {
-        AddRawImage((self, player) => builder(self));
-      }
-
-      public void AddRawImage(BuildUiFor<RawImageElement> builder)
-      {
-        if (Initialized)
+        public override IEnumerable<CuiElement> GetCuiElements()
         {
-          var element = AddChild<RawImageElement>();
-          element.BuilderFor = builder;
-          return;
+          CuiElement cuiElement = new CuiElement()
+          {
+            Name = Id,
+            Parent = GetParentId(),
+          };
+
+          cuiElement.Components.Add(Image);
+          cuiElement.Components.Add(Bounds.GetCuiComponent());
+
+          if (CursorEnabled)
+            cuiElement.Components.Add(new CuiNeedsCursorComponent());
+
+          if (KeyboardEnabled)
+            cuiElement.Components.Add(new CuiNeedsKeyboardComponent());
+
+          return new CuiElement[] { cuiElement };
         }
 
-        AddChild(new RawImageElement(this, builder));
-      }
-
-      public void AddLabel(BuildUi<LabelElement> builder)
-      {
-        AddLabel((self, player) => builder(self));
-      }
-
-      public void AddLabel(BuildUiFor<LabelElement> builder)
-      {
-        if (Initialized)
+        public void AddPanel(RenderUi<Instance> renderer)
         {
-          var element = AddChild<LabelElement>();
-          element.BuilderFor = builder;
-          return;
+          PanelElement element = Initialized ? AddChild<PanelElement>() : AddChild(new PanelElement(Element));
+          element.GetOrCreateInstance(Player, renderer);
         }
 
-        AddChild(new LabelElement(this, builder));
-      }
-
-      public void AddButton(BuildUi<ButtonElement> builder)
-      {
-        AddButton((self, player) => builder(self));
-      }
-
-      public void AddButton(BuildUiFor<ButtonElement> builder)
-      {
-        if (Initialized)
+        public void AddLabel(RenderUi<LabelElement.Instance> renderer)
         {
-          var element = AddChild<ButtonElement>();
-          element.BuilderFor = builder;
-          return;
+          LabelElement element = Initialized ? AddChild<LabelElement>() : AddChild(new LabelElement(Element));
+          element.GetOrCreateInstance(Player, renderer);
         }
 
-        AddChild(new ButtonElement(this, builder));
-      }
-
-      public void AddTabs(BuildUi<TabsElement> builder)
-      {
-        AddTabs((self, player) => builder(self));
-      }
-
-      public void AddTabs(BuildUiFor<TabsElement> builder)
-      {
-        if (Initialized)
+        public void AddButton(RenderUi<ButtonElement.Instance> renderer)
         {
-          var element = AddChild<TabsElement>();
-          element.BuilderFor = (self, player) => builder((TabsElement)self, player);
-          return;
+          ButtonElement element = Initialized ? AddChild<ButtonElement>() : AddChild(new ButtonElement(Element));
+          element.GetOrCreateInstance(Player, renderer);
         }
 
-        AddChild(new TabsElement(this, builder));
-      }
-
-      public void AddGrid(BuildUi<GridElement> builder)
-      {
-        AddGrid((self, player) => builder(self));
-      }
-
-      public void AddGrid(BuildUiFor<GridElement> builder)
-      {
-        if (Initialized)
+        public void AddGameImage(RenderUi<GameImageElement.Instance> renderer)
         {
-          var element = AddChild<GridElement>();
-          element.BuilderFor = (self, player) => builder((GridElement)self, player);
-          return;
+          GameImageElement element = Initialized ? AddChild<GameImageElement>() : AddChild(new GameImageElement(Element));
+          element.GetOrCreateInstance(Player, renderer);
         }
 
-        AddChild(new GridElement(this, builder));
+        public void AddRawImage(RenderUi<RawImageElement.Instance> renderer)
+        {
+          RawImageElement element = Initialized ? AddChild<RawImageElement>() : AddChild(new RawImageElement(Element));
+          element.GetOrCreateInstance(Player, renderer);
+        }
+
+        public void AddTabs(RenderUi<TabsElement.Instance> renderer)
+        {
+          TabsElement element = Initialized ? AddChild<TabsElement>() : AddChild(new TabsElement(Element));
+          element.GetOrCreateInstance(Player, renderer);
+        }
+
+        public void AddGrid(RenderUi<GridElement.Instance> renderer)
+        {
+          GridElement element = Initialized ? AddChild<GridElement>() : AddChild(new GridElement(Element));
+          element.GetOrCreateInstance(Player, renderer);
+        }
       }
     }
 
@@ -846,38 +907,65 @@ namespace Oxide.Plugins
     /// </summary>
     public class LabelElement : Element
     {
-      protected internal BuildUiFor<LabelElement> BuilderFor { get; set; }
-
-      public readonly CuiTextComponent Text = new CuiTextComponent();
-
-      internal LabelElement(Element parent, BuildUi<LabelElement> builder) : this(parent, (self, player) => builder(self))
+      internal LabelElement(Element parent) : base(parent)
       {
       }
 
-      internal LabelElement(Element parent, BuildUiFor<LabelElement> builder) : base(parent)
+      public Instance GetOrCreateInstance(BasePlayer player, RenderUi<Instance> renderer)
       {
-        BuilderFor = builder;
+        var instance = GetInstance<Instance>(player);
+        if (instance == null)
+          instance = new Instance(this, player, renderer);
+        else
+          instance.Renderer = renderer;
+
+        InstanceCache[player.userID] = instance;
+        return instance;
       }
 
-      public override bool DoBuild(BasePlayer player)
+      /// <summary>
+      /// Build this element for the given player.
+      /// </summary>
+      /// <param name="player"></param>
+      /// <param name="updatedElements"></param>
+      /// <param name="parentHasUpdates"></param>
+      /// <exception cref="Exception"></exception>
+      public override void Build(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
       {
-        return BuilderFor(this, player);
+        InstanceCache[player.userID].Build(updatedElements, parentHasUpdates);
       }
 
-      protected internal override IEnumerable<CuiElement> GetCuiElements(string parentId)
+      public new class Instance : Element.Instance
       {
-        CuiElement cuiElement = new CuiElement()
+        public readonly CuiTextComponent Text = new CuiTextComponent();
+
+        protected internal RenderUi<Instance> Renderer { get; set; }
+
+        internal Instance(Element element, BasePlayer player, RenderUi<Instance> renderer) : base(element, player)
         {
-          Name = Id,
-          Parent = parentId,
-        };
+          Renderer = renderer;
+        }
 
-        if (!string.IsNullOrEmpty(Text?.Text))
-          cuiElement.Components.Add(Text);
+        public override bool Render()
+        {
+          return Renderer(this);
+        }
 
-        cuiElement.Components.Add(Bounds.GetCuiComponent());
+        public override IEnumerable<CuiElement> GetCuiElements()
+        {
+          CuiElement cuiElement = new CuiElement()
+          {
+            Name = Id,
+            Parent = GetParentId(),
+          };
 
-        return new CuiElement[] { cuiElement };
+          if (!string.IsNullOrEmpty(Text?.Text))
+            cuiElement.Components.Add(Text);
+
+          cuiElement.Components.Add(Bounds.GetCuiComponent());
+
+          return new CuiElement[] { cuiElement };
+        }
       }
     }
 
@@ -886,55 +974,82 @@ namespace Oxide.Plugins
     /// </summary>
     public class ButtonElement : Element
     {
-      protected internal BuildUiFor<ButtonElement> BuilderFor { get; set; }
-
-      public readonly CuiButtonComponent Button = new CuiButtonComponent();
-      public readonly CuiTextComponent Text = new CuiTextComponent();
-
-      internal ButtonElement(Element parent, BuildUi<ButtonElement> builder) : this(parent, (self, player) => builder(self))
+      internal ButtonElement(Element parent) : base(parent)
       {
       }
 
-      internal ButtonElement(Element parent, BuildUiFor<ButtonElement> builder) : base(parent)
+      public Instance GetOrCreateInstance(BasePlayer player, RenderUi<Instance> renderer)
       {
-        BuilderFor = builder;
+        var instance = GetInstance<Instance>(player);
+        if (instance == null)
+          instance = new Instance(this, player, renderer);
+        else
+          instance.Renderer = renderer;
+
+        InstanceCache[player.userID] = instance;
+        return instance;
       }
 
-      public override bool DoBuild(BasePlayer player)
+      /// <summary>
+      /// Build this element for the given player.
+      /// </summary>
+      /// <param name="player"></param>
+      /// <param name="updatedElements"></param>
+      /// <param name="parentHasUpdates"></param>
+      /// <exception cref="Exception"></exception>
+      public override void Build(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
       {
-        return BuilderFor(this, player);
+        InstanceCache[player.userID].Build(updatedElements, parentHasUpdates);
       }
 
-      protected internal override IEnumerable<CuiElement> GetCuiElements(string parentId)
+      public new class Instance : Element.Instance
       {
-        var cuiElements = new List<CuiElement>
+        public readonly CuiButtonComponent Button = new CuiButtonComponent();
+        public readonly CuiTextComponent Text = new CuiTextComponent();
+
+        protected internal RenderUi<Instance> Renderer { get; set; }
+
+        internal Instance(Element element, BasePlayer player, RenderUi<Instance> renderer) : base(element, player)
         {
-          new CuiElement()
-          {
-            Name = Id,
-            Parent = parentId,
-            Components =
-            {
-              Button,
-              Bounds.GetCuiComponent()
-            }
-          }
-        };
-
-        if (!string.IsNullOrEmpty(Text?.Text))
-        {
-          cuiElements.Add(new CuiElement
-          {
-            Name = CuiHelper.GetGuid(),
-            Parent = Id,
-            Components = {
-              Text,
-              new CuiRectTransformComponent()
-            }
-          });
+          Renderer = renderer;
         }
 
-        return cuiElements;
+        public override bool Render()
+        {
+          return Renderer(this);
+        }
+
+        public override IEnumerable<CuiElement> GetCuiElements()
+        {
+          var cuiElements = new List<CuiElement>
+          {
+            new CuiElement()
+            {
+              Name = Id,
+              Parent = GetParentId(),
+              Components =
+              {
+                Button,
+                Bounds.GetCuiComponent()
+              }
+            }
+          };
+
+          if (!string.IsNullOrEmpty(Text?.Text))
+          {
+            cuiElements.Add(new CuiElement
+            {
+              Name = CuiHelper.GetGuid(),
+              Parent = Id,
+              Components = {
+                Text,
+                new CuiRectTransformComponent()
+              }
+            });
+          }
+
+          return cuiElements;
+        }
       }
     }
 
@@ -943,37 +1058,64 @@ namespace Oxide.Plugins
     /// </summary>
     public class RawImageElement : Element
     {
-      protected internal BuildUiFor<RawImageElement> BuilderFor { get; set; }
-
-      public readonly CuiRawImageComponent Image = new CuiRawImageComponent();
-
-      internal RawImageElement(Element parent, BuildUi<RawImageElement> builder) : this(parent, (self, player) => builder(self))
+      internal RawImageElement(Element parent) : base(parent)
       {
       }
 
-      internal RawImageElement(Element parent, BuildUiFor<RawImageElement> builder) : base(parent)
+      public Instance GetOrCreateInstance(BasePlayer player, RenderUi<Instance> renderer)
       {
-        BuilderFor = builder;
+        var instance = GetInstance<Instance>(player);
+        if (instance == null)
+          instance = new Instance(this, player, renderer);
+        else
+          instance.Renderer = renderer;
+
+        InstanceCache[player.userID] = instance;
+        return instance;
       }
 
-      public override bool DoBuild(BasePlayer player)
+      /// <summary>
+      /// Build this element for the given player.
+      /// </summary>
+      /// <param name="player"></param>
+      /// <param name="updatedElements"></param>
+      /// <param name="parentHasUpdates"></param>
+      /// <exception cref="Exception"></exception>
+      public override void Build(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
       {
-        return BuilderFor(this, player);
+        InstanceCache[player.userID].Build(updatedElements, parentHasUpdates);
       }
 
-      protected internal override IEnumerable<CuiElement> GetCuiElements(string parentId)
+      public new class Instance : Element.Instance
       {
-        CuiElement cuiElement = new CuiElement()
+        public readonly CuiRawImageComponent Image = new CuiRawImageComponent();
+
+        protected internal RenderUi<Instance> Renderer { get; set; }
+
+        internal Instance(Element element, BasePlayer player, RenderUi<Instance> renderer) : base(element, player)
         {
-          Name = Id,
-          Parent = parentId,
-          Components = {
-            Image,
-            Bounds.GetCuiComponent()
-          }
-        };
+          Renderer = renderer;
+        }
 
-        return new CuiElement[] { cuiElement };
+        public override bool Render()
+        {
+          return Renderer(this);
+        }
+
+        public override IEnumerable<CuiElement> GetCuiElements()
+        {
+          CuiElement cuiElement = new CuiElement()
+          {
+            Name = Id,
+            Parent = GetParentId(),
+            Components = {
+              Image,
+              Bounds.GetCuiComponent()
+            }
+          };
+
+          return new CuiElement[] { cuiElement };
+        }
       }
     }
 
@@ -982,37 +1124,63 @@ namespace Oxide.Plugins
     /// </summary>
     public class GameImageElement : Element
     {
-      protected internal BuildUiFor<GameImageElement> BuilderFor { get; set; }
-
-      public readonly CuiImageComponent Image = new CuiImageComponent();
-
-      internal GameImageElement(Element parent, BuildUi<GameImageElement> builder) : this(parent, (self, player) => builder(self))
+      internal GameImageElement(Element parent) : base(parent)
       {
       }
 
-      internal GameImageElement(Element parent, BuildUiFor<GameImageElement> builder) : base(parent)
+      public Instance GetOrCreateInstance(BasePlayer player, RenderUi<Instance> renderer)
       {
-        BuilderFor = builder;
+        var instance = GetInstance<Instance>(player);
+        if (instance == null)
+          instance = new Instance(this, player, renderer);
+        else
+          instance.Renderer = renderer;
+
+        InstanceCache[player.userID] = instance;
+        return instance;
       }
 
-      public override bool DoBuild(BasePlayer player)
+      /// <summary>
+      /// Build this element for the given player.
+      /// </summary>
+      /// <param name="player"></param>
+      /// <param name="updatedElements"></param>
+      /// <param name="parentHasUpdates"></param>
+      /// <exception cref="Exception"></exception>
+      public override void Build(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
       {
-        return BuilderFor(this, player);
+        InstanceCache[player.userID].Build(updatedElements, parentHasUpdates);
       }
 
-      protected internal override IEnumerable<CuiElement> GetCuiElements(string parentId)
+      public new class Instance : Element.Instance
       {
-        CuiElement cuiElement = new CuiElement()
+        public readonly CuiImageComponent Image = new CuiImageComponent();
+        protected internal RenderUi<Instance> Renderer { get; set; }
+
+        internal Instance(Element element, BasePlayer player, RenderUi<Instance> renderer) : base(element, player)
         {
-          Name = Id,
-          Parent = parentId,
-          Components = {
-            Image,
-            Bounds.GetCuiComponent()
-          }
-        };
+          Renderer = renderer;
+        }
 
-        return new CuiElement[] { cuiElement };
+        public override bool Render()
+        {
+          return Renderer(this);
+        }
+
+        public override IEnumerable<CuiElement> GetCuiElements()
+        {
+          CuiElement cuiElement = new CuiElement()
+          {
+            Name = Id,
+            Parent = GetParentId(),
+            Components = {
+              Image,
+              Bounds.GetCuiComponent()
+            }
+          };
+
+          return new CuiElement[] { cuiElement };
+        }
       }
     }
 
@@ -1021,73 +1189,80 @@ namespace Oxide.Plugins
     /// </summary>
     public class TabsElement : PanelElement
     {
-      protected internal BuildUiFor<TabsElement> TabsBuilderFor { get; set; }
-
-      public bool Vertical = false;
-      public double Gap = 0;
-      public double MaxButtonSize = 0;
-
-      private int _BuildingTabIndex = 0;
-      private int TabsCount = 0;
-
-      internal TabsElement(Element parent, BuildUi<TabsElement> builder) : this(parent, (self, player) => builder(self))
+      internal TabsElement(Element parent) : base(parent)
       {
       }
 
-      internal TabsElement(Element parent, BuildUiFor<TabsElement> builder) : base(parent, (self, player) => builder((TabsElement)self, player))
+      public Instance GetOrCreateInstance(BasePlayer player, RenderUi<Instance> renderer)
       {
-        TabsBuilderFor = (tabs, player) =>
+        var instance = GetInstance<Instance>(player);
+        if (instance == null)
+          instance = new Instance(this, player, renderer);
+        else
+          instance.Renderer = renderer;
+
+        InstanceCache[player.userID] = instance;
+        return instance;
+      }
+
+      public new class Instance : PanelElement.Instance
+      {
+        public bool Vertical = false;
+        public double Gap = 0;
+        public double MaxButtonSize = 0;
+
+        private int _BuildingTabIndex = 0;
+        private int TabsCount = 0;
+
+        protected internal new RenderUi<Instance> Renderer { get; set; }
+
+        internal Instance(Element element, BasePlayer player, RenderUi<Instance> renderer) : base(element, player, null)
+        {
+          Renderer = renderer;
+        }
+
+        public override bool Render()
         {
           _BuildingTabIndex = 0;
-          return BuilderFor(tabs, player);
-        };
-      }
-
-      public override bool DoBuild(BasePlayer player)
-      {
-        return TabsBuilderFor(this, player);
-      }
-
-      public void AddTab(BuildUi<ButtonElement> builder)
-      {
-        AddTab((self, player) => builder(self));
-      }
-
-      public void AddTab(BuildUiFor<ButtonElement> builder)
-      {
-        if (!Initialized)
-        {
-          TabsCount++;
+          return Renderer(this);
         }
 
-        AddButton((button, player) =>
+        public void AddTab(RenderUi<ButtonElement.Instance> renderer)
         {
-          SetTabDefaults(button);
-          _BuildingTabIndex++;
-          return builder(button, player);
-        });
-      }
+          if (!Initialized)
+          {
+            TabsCount++;
+          }
 
-      private void SetTabDefaults(ButtonElement button)
-      {
-        var gapSize = Gap;
-        var buttonSize = 1.0 / TabsCount - gapSize * (TabsCount - 1) / TabsCount;
-        buttonSize = MaxButtonSize > 0 ? Math.Min(buttonSize, MaxButtonSize) : buttonSize;
-        var offset = (double)_BuildingTabIndex / TabsCount * (1 + gapSize);
-
-        if (Vertical)
-        {
-          button.Bounds.MinX = 0;
-          button.Bounds.MaxX = 1;
-          button.Bounds.MinY = 1 - offset - buttonSize;
-          button.Bounds.MaxY = 1 - offset;
+          AddButton((button) =>
+          {
+            SetTabDefaults(button);
+            _BuildingTabIndex++;
+            return renderer(button);
+          });
         }
-        else
+
+        private void SetTabDefaults(ButtonElement.Instance button)
         {
-          button.Bounds.MinX = offset;
-          button.Bounds.MaxX = offset + buttonSize;
-          button.Bounds.MinY = 0;
-          button.Bounds.MaxY = 1;
+          var gapSize = Gap;
+          var buttonSize = 1.0 / TabsCount - gapSize * (TabsCount - 1) / TabsCount;
+          buttonSize = MaxButtonSize > 0 ? Math.Min(buttonSize, MaxButtonSize) : buttonSize;
+          var offset = (double)_BuildingTabIndex / TabsCount * (1 + gapSize);
+
+          if (Vertical)
+          {
+            button.Bounds.MinX = 0;
+            button.Bounds.MaxX = 1;
+            button.Bounds.MinY = 1 - offset - buttonSize;
+            button.Bounds.MaxY = 1 - offset;
+          }
+          else
+          {
+            button.Bounds.MinX = offset;
+            button.Bounds.MaxX = offset + buttonSize;
+            button.Bounds.MinY = 0;
+            button.Bounds.MaxY = 1;
+          }
         }
       }
     }
@@ -1097,63 +1272,70 @@ namespace Oxide.Plugins
     /// </summary>
     public class GridElement : PanelElement
     {
-      protected internal BuildUiFor<GridElement> GridBuilderFor { get; set; }
-
-      public double GapX = 0;
-      public double GapY = 0;
-
-      public int Rows = 2;
-      public int Columns = 2;
-
-      private int _BuildingTabIndex = 0;
-
-      internal GridElement(Element parent, BuildUi<GridElement> builder) : this(parent, (self, player) => builder(self))
+      internal GridElement(Element parent) : base(parent)
       {
       }
 
-      internal GridElement(Element parent, BuildUiFor<GridElement> builder) : base(parent, (self, player) => builder((GridElement)self, player))
+      public Instance GetOrCreateInstance(BasePlayer player, RenderUi<Instance> renderer)
       {
-        GridBuilderFor = (cells, player) =>
+        var instance = GetInstance<Instance>(player);
+        if (instance == null)
+          instance = new Instance(this, player, renderer);
+        else
+          instance.Renderer = renderer;
+
+        InstanceCache[player.userID] = instance;
+        return instance;
+      }
+
+      public new class Instance : PanelElement.Instance
+      {
+        public double GapX = 0;
+        public double GapY = 0;
+
+        public int Rows = 2;
+        public int Columns = 2;
+
+        private int _BuildingCellIndex = 0;
+
+        protected internal new RenderUi<Instance> Renderer { get; set; }
+
+        internal Instance(Element element, BasePlayer player, RenderUi<Instance> renderer) : base(element, player, null)
         {
-          _BuildingTabIndex = 0;
-          return BuilderFor(cells, player);
-        };
-      }
+          Renderer = renderer;
+        }
 
-      public override bool DoBuild(BasePlayer player)
-      {
-        return GridBuilderFor(this, player);
-      }
-
-      public void AddCell(BuildUi<PanelElement> builder)
-      {
-        AddCell((self, player) => builder(self));
-      }
-
-      public void AddCell(BuildUiFor<PanelElement> builder)
-      {
-        AddPanel((cell, player) =>
+        public override bool Render()
         {
-          SetCellDefaults(cell);
-          _BuildingTabIndex++;
-          return builder(cell, player);
-        });
-      }
+          _BuildingCellIndex = 0;
+          return Renderer(this);
+        }
 
-      private void SetCellDefaults(PanelElement cell)
-      {
-        var column = _BuildingTabIndex % Columns;
-        var width = 1.0 / Columns - GapX * (Columns - 1) / Columns;
-        var offsetX = (double)column / Columns * (1 + GapX);
+        public void AddCell(RenderUi<PanelElement.Instance> renderer)
+        {
+          AddPanel((cell) =>
+          {
+            SetCellDefaults(cell);
+            _BuildingCellIndex++;
+            return renderer(cell);
+          });
+        }
 
-        var row = _BuildingTabIndex / Columns;
-        var height = 1.0 / Rows - GapY * (Rows - 1) / Rows;
-        var offsetY = (double)row / Rows * (1 + GapY);
+        private void SetCellDefaults(PanelElement.Instance cell)
+        {
+          var column = _BuildingCellIndex % Columns;
+          var width = 1.0 / Columns - GapX * (Columns - 1) / Columns;
+          var offsetX = (double)column / Columns * (1 + GapX);
 
-        cell.Bounds.MinX = offsetX;
-        cell.Bounds.MaxX = offsetX + width;
-        cell.Bounds.MinY = 1 - offsetY - height;
-        cell.Bounds.MaxY = 1 - offsetY;
+          var row = _BuildingCellIndex / Columns;
+          var height = 1.0 / Rows - GapY * (Rows - 1) / Rows;
+          var offsetY = (double)row / Rows * (1 + GapY);
+
+          cell.Bounds.MinX = offsetX;
+          cell.Bounds.MaxX = offsetX + width;
+          cell.Bounds.MinY = 1 - offsetY - height;
+          cell.Bounds.MaxY = 1 - offsetY;
+        }
       }
     }
 
