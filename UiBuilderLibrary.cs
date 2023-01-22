@@ -6,7 +6,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
-using static Oxide.Plugins.UiBuilderLibrary.Element.Instance;
 
 namespace Oxide.Plugins
 {
@@ -279,7 +278,7 @@ namespace Oxide.Plugins
       /// </summary>
       /// <param name="parentId">The parent of this UI. For top-level UIs, one of: "Overlay", "Hud.Menu", "Hud" or "Under"</param>
       /// <param name="rootBuilder">Callback function that builds the UI.</param>
-      public UI(string parentId, RenderUi<RootElement.Instance> rootBuilder)
+      public UI(string parentId, Func<RootElement.Instance, bool> rootBuilder)
       {
         Root = new RootElement(parentId, rootBuilder);
         AllUis.Add(new WeakReference<UI>(this));
@@ -503,14 +502,6 @@ namespace Oxide.Plugins
       /// </summary>
       public abstract class Instance
       {
-        /// <summary>
-        /// Render the element for the given player.
-        /// </summary>
-        /// <typeparam name="T">The type of instance being rendered.</typeparam>
-        /// <param name="instance">The instance being rendered.</param>
-        /// <returns>True iff the UI element needs to be refreshed on player's screen.</returns>
-        public delegate bool RenderUi<in T>(T instance) where T : Instance;
-
         public string Id { get; }
 
         protected readonly Element Element;
@@ -721,9 +712,9 @@ namespace Oxide.Plugins
     /// </summary>
     public class RootElement : PanelElement
     {
-      protected internal RenderUi<Instance> Renderer;
+      protected internal Func<Instance, bool> Renderer;
 
-      internal RootElement(string parentId, RenderUi<Instance> renderer) : base(parentId)
+      internal RootElement(string parentId, Func<Instance, bool> renderer) : base(parentId)
       {
         Renderer = renderer;
       }
@@ -780,7 +771,7 @@ namespace Oxide.Plugins
       {
       }
 
-      public Instance EnsureInstance(BasePlayer player, RenderUi<Instance> renderer)
+      public Instance EnsureInstance(BasePlayer player, Func<Instance, bool> renderer)
       {
         var instance = GetInstance<Instance>(player);
         if (instance != null)
@@ -813,9 +804,9 @@ namespace Oxide.Plugins
         public bool CursorEnabled = false;
         public bool KeyboardEnabled = false;
 
-        protected internal RenderUi<Instance> Renderer { get; set; }
+        protected internal Func<Instance, bool> Renderer { get; set; }
 
-        internal Instance(Element element, BasePlayer player, RenderUi<Instance> renderer) : base(element, player)
+        internal Instance(Element element, BasePlayer player, Func<Instance, bool> renderer) : base(element, player)
         {
           Renderer = renderer;
         }
@@ -845,43 +836,43 @@ namespace Oxide.Plugins
           return new CuiElement[] { cuiElement };
         }
 
-        public void AddPanel(RenderUi<Instance> renderer)
+        public void AddPanel(Func<Instance, bool> renderer)
         {
           PanelElement element = Initialized ? AddChild<PanelElement>() : AddChild(new PanelElement(Element));
           element.EnsureInstance(Player, renderer);
         }
 
-        public void AddLabel(RenderUi<LabelElement.Instance> renderer)
+        public void AddLabel(Func<LabelElement.Instance, bool> renderer)
         {
           LabelElement element = Initialized ? AddChild<LabelElement>() : AddChild(new LabelElement(Element));
           element.EnsureInstance(Player, renderer);
         }
 
-        public void AddButton(RenderUi<ButtonElement.Instance> renderer)
+        public void AddButton(Func<ButtonElement.Instance, bool> renderer)
         {
           ButtonElement element = Initialized ? AddChild<ButtonElement>() : AddChild(new ButtonElement(Element));
           element.EnsureInstance(Player, renderer);
         }
 
-        public void AddGameImage(RenderUi<GameImageElement.Instance> renderer)
+        public void AddGameImage(Func<GameImageElement.Instance, bool> renderer)
         {
           GameImageElement element = Initialized ? AddChild<GameImageElement>() : AddChild(new GameImageElement(Element));
           element.EnsureInstance(Player, renderer);
         }
 
-        public void AddRawImage(RenderUi<RawImageElement.Instance> renderer)
+        public void AddRawImage(Func<RawImageElement.Instance, bool> renderer)
         {
           RawImageElement element = Initialized ? AddChild<RawImageElement>() : AddChild(new RawImageElement(Element));
           element.EnsureInstance(Player, renderer);
         }
 
-        public void AddTabs(RenderUi<TabsElement.Instance> renderer)
+        public void AddTabs(Func<TabsElement.Instance, bool> renderer)
         {
           TabsElement element = Initialized ? AddChild<TabsElement>() : AddChild(new TabsElement(Element));
           element.EnsureInstance(Player, renderer);
         }
 
-        public void AddGrid(RenderUi<GridElement.Instance> renderer)
+        public void AddGrid(Func<GridElement.Instance, bool> renderer)
         {
           GridElement element = Initialized ? AddChild<GridElement>() : AddChild(new GridElement(Element));
           element.EnsureInstance(Player, renderer);
@@ -898,7 +889,7 @@ namespace Oxide.Plugins
       {
       }
 
-      public Instance EnsureInstance(BasePlayer player, RenderUi<Instance> renderer)
+      public Instance EnsureInstance(BasePlayer player, Func<Instance, bool> renderer)
       {
         var instance = GetInstance<Instance>(player);
         if (instance != null)
@@ -929,9 +920,9 @@ namespace Oxide.Plugins
       {
         public readonly CuiTextComponent Text = new CuiTextComponent();
 
-        protected internal RenderUi<Instance> Renderer { get; set; }
+        protected internal Func<Instance, bool> Renderer { get; set; }
 
-        internal Instance(Element element, BasePlayer player, RenderUi<Instance> renderer) : base(element, player)
+        internal Instance(Element element, BasePlayer player, Func<Instance, bool> renderer) : base(element, player)
         {
           Renderer = renderer;
         }
@@ -968,7 +959,7 @@ namespace Oxide.Plugins
       {
       }
 
-      public Instance EnsureInstance(BasePlayer player, RenderUi<Instance> renderer)
+      public Instance EnsureInstance(BasePlayer player, Func<Instance, bool> renderer)
       {
         var instance = GetInstance<Instance>(player);
         if (instance != null)
@@ -1000,9 +991,9 @@ namespace Oxide.Plugins
         public readonly CuiButtonComponent Button = new CuiButtonComponent();
         public readonly CuiTextComponent Text = new CuiTextComponent();
 
-        protected internal RenderUi<Instance> Renderer { get; set; }
+        protected internal Func<Instance, bool> Renderer { get; set; }
 
-        internal Instance(Element element, BasePlayer player, RenderUi<Instance> renderer) : base(element, player)
+        internal Instance(Element element, BasePlayer player, Func<Instance, bool> renderer) : base(element, player)
         {
           Renderer = renderer;
         }
@@ -1055,7 +1046,7 @@ namespace Oxide.Plugins
       {
       }
 
-      public Instance EnsureInstance(BasePlayer player, RenderUi<Instance> renderer)
+      public Instance EnsureInstance(BasePlayer player, Func<Instance, bool> renderer)
       {
         var instance = GetInstance<Instance>(player);
         if (instance != null)
@@ -1086,9 +1077,9 @@ namespace Oxide.Plugins
       {
         public readonly CuiRawImageComponent Image = new CuiRawImageComponent();
 
-        protected internal RenderUi<Instance> Renderer { get; set; }
+        protected internal Func<Instance, bool> Renderer { get; set; }
 
-        internal Instance(Element element, BasePlayer player, RenderUi<Instance> renderer) : base(element, player)
+        internal Instance(Element element, BasePlayer player, Func<Instance, bool> renderer) : base(element, player)
         {
           Renderer = renderer;
         }
@@ -1124,7 +1115,7 @@ namespace Oxide.Plugins
       {
       }
 
-      public Instance EnsureInstance(BasePlayer player, RenderUi<Instance> renderer)
+      public Instance EnsureInstance(BasePlayer player, Func<Instance, bool> renderer)
       {
         var instance = GetInstance<Instance>(player);
         if (instance != null)
@@ -1154,9 +1145,9 @@ namespace Oxide.Plugins
       public new class Instance : Element.Instance
       {
         public readonly CuiImageComponent Image = new CuiImageComponent();
-        protected internal RenderUi<Instance> Renderer { get; set; }
+        protected internal Func<Instance, bool> Renderer { get; set; }
 
-        internal Instance(Element element, BasePlayer player, RenderUi<Instance> renderer) : base(element, player)
+        internal Instance(Element element, BasePlayer player, Func<Instance, bool> renderer) : base(element, player)
         {
           Renderer = renderer;
         }
@@ -1192,7 +1183,7 @@ namespace Oxide.Plugins
       {
       }
 
-      public Instance EnsureInstance(BasePlayer player, RenderUi<Instance> renderer)
+      public Instance EnsureInstance(BasePlayer player, Func<Instance, bool> renderer)
       {
         var instance = GetInstance<Instance>(player);
         if (instance != null)
@@ -1215,9 +1206,9 @@ namespace Oxide.Plugins
         private int _BuildingTabIndex = 0;
         private int TabsCount = 0;
 
-        protected internal new RenderUi<Instance> Renderer { get; set; }
+        protected internal new Func<Instance, bool> Renderer { get; set; }
 
-        internal Instance(Element element, BasePlayer player, RenderUi<Instance> renderer) : base(element, player, null)
+        internal Instance(Element element, BasePlayer player, Func<Instance, bool> renderer) : base(element, player, null)
         {
           Renderer = renderer;
         }
@@ -1228,7 +1219,7 @@ namespace Oxide.Plugins
           return Renderer(this);
         }
 
-        public void AddTab(RenderUi<ButtonElement.Instance> renderer)
+        public void AddTab(Func<ButtonElement.Instance, bool> renderer)
         {
           if (!Initialized)
           {
@@ -1277,7 +1268,7 @@ namespace Oxide.Plugins
       {
       }
 
-      public Instance EnsureInstance(BasePlayer player, RenderUi<Instance> renderer)
+      public Instance EnsureInstance(BasePlayer player, Func<Instance, bool> renderer)
       {
         var instance = GetInstance<Instance>(player);
         if (instance != null)
@@ -1301,9 +1292,9 @@ namespace Oxide.Plugins
 
         private int _BuildingCellIndex = 0;
 
-        protected internal new RenderUi<Instance> Renderer { get; set; }
+        protected internal new Func<Instance, bool> Renderer { get; set; }
 
-        internal Instance(Element element, BasePlayer player, RenderUi<Instance> renderer) : base(element, player, null)
+        internal Instance(Element element, BasePlayer player, Func<Instance, bool> renderer) : base(element, player, null)
         {
           Renderer = renderer;
         }
@@ -1314,7 +1305,7 @@ namespace Oxide.Plugins
           return Renderer(this);
         }
 
-        public void AddCell(RenderUi<PanelElement.Instance> renderer)
+        public void AddCell(Func<PanelElement.Instance, bool> renderer)
         {
           AddPanel((cell) =>
           {
