@@ -352,9 +352,7 @@ namespace Oxide.Plugins
       public void CloseAll()
       {
         foreach (BasePlayer player in BasePlayer.activePlayerList)
-        {
           Close(player);
-        }
       }
 
       /// <summary>
@@ -445,7 +443,7 @@ namespace Oxide.Plugins
     {
       protected readonly HardWeakValueDictionary<ulong, Instance> InstanceCache = new HardWeakValueDictionary<ulong, Instance>();
 
-      // `Parent` should be null if `ParentId` is set.
+      // `Parent` and `ParentId` should not both be set.
       private readonly string ParentId;
 
       private readonly Element Parent;
@@ -511,9 +509,9 @@ namespace Oxide.Plugins
         public bool Visible { get; set; } = true;
 
         protected readonly List<Element> Children = new List<Element>();
-        private int BuildingChildIndex = 0;
-        internal bool IsOpen = false;
-        internal bool Initialized;
+        private int BuildingChildIndex;
+        protected bool IsOpen;
+        protected bool Initialized;
 
         public Instance(Element element, BasePlayer player)
         {
@@ -628,7 +626,7 @@ namespace Oxide.Plugins
     /// </summary>
     public class RootElement : PanelElement
     {
-      protected internal Func<Instance, bool> Renderer;
+      protected internal Func<Instance, bool> Renderer { get; set; }
 
       internal RootElement(string parentId, Func<Instance, bool> renderer) : base(parentId)
       {
@@ -716,9 +714,9 @@ namespace Oxide.Plugins
 
       public new class Instance : Element.Instance
       {
-        public readonly CuiImageComponent Image = new CuiImageComponent();
-        public bool CursorEnabled = false;
-        public bool KeyboardEnabled = false;
+        public CuiImageComponent Image { get; } = new CuiImageComponent();
+        public bool CursorEnabled { get; set; }
+        public bool KeyboardEnabled { get; set; }
 
         protected internal Func<Instance, bool> Renderer { get; set; }
 
@@ -834,7 +832,7 @@ namespace Oxide.Plugins
 
       public new class Instance : Element.Instance
       {
-        public readonly CuiTextComponent Text = new CuiTextComponent();
+        public CuiTextComponent Text { get; } = new CuiTextComponent();
 
         protected internal Func<Instance, bool> Renderer { get; set; }
 
@@ -904,8 +902,8 @@ namespace Oxide.Plugins
 
       public new class Instance : Element.Instance
       {
-        public readonly CuiButtonComponent Button = new CuiButtonComponent();
-        public readonly CuiTextComponent Text = new CuiTextComponent();
+        public CuiButtonComponent Button { get; } = new CuiButtonComponent();
+        public CuiTextComponent Text { get; } = new CuiTextComponent();
 
         protected internal Func<Instance, bool> Renderer { get; set; }
 
@@ -991,7 +989,7 @@ namespace Oxide.Plugins
 
       public new class Instance : Element.Instance
       {
-        public readonly CuiRawImageComponent Image = new CuiRawImageComponent();
+        public CuiRawImageComponent Image { get; } = new CuiRawImageComponent();
 
         protected internal Func<Instance, bool> Renderer { get; set; }
 
@@ -1060,7 +1058,7 @@ namespace Oxide.Plugins
 
       public new class Instance : Element.Instance
       {
-        public readonly CuiImageComponent Image = new CuiImageComponent();
+        public CuiImageComponent Image { get; } = new CuiImageComponent();
         protected internal Func<Instance, bool> Renderer { get; set; }
 
         internal Instance(Element element, BasePlayer player, Func<Instance, bool> renderer) : base(element, player)
@@ -1115,12 +1113,12 @@ namespace Oxide.Plugins
 
       public new class Instance : PanelElement.Instance
       {
-        public bool Vertical = false;
-        public double Gap = 0;
-        public double MaxButtonSize = 0;
+        public bool Vertical { get; set; }
+        public double Gap { get; set; }
+        public double MaxButtonSize { get; set; }
 
-        private int _BuildingTabIndex = 0;
-        private int TabsCount = 0;
+        private int _BuildingTabIndex;
+        private int TabsCount;
 
         protected internal new Func<Instance, bool> Renderer { get; set; }
 
@@ -1200,13 +1198,13 @@ namespace Oxide.Plugins
 
       public new class Instance : PanelElement.Instance
       {
-        public double GapX = 0;
-        public double GapY = 0;
+        public double GapX { get; set; }
+        public double GapY { get; set; }
 
-        public int Rows = 2;
-        public int Columns = 2;
+        public int Rows { get; set; } = 2;
+        public int Columns { get; set; } = 2;
 
-        private int _BuildingCellIndex = 0;
+        private int _BuildingCellIndex;
 
         protected internal new Func<Instance, bool> Renderer { get; set; }
 
