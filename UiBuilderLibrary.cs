@@ -1574,6 +1574,7 @@ namespace Oxide.Plugins
     /// A weak reference to an object of type `T`.
     /// </summary>
     /// <typeparam name="T"></typeparam>
+    [Serializable]
     public class WeakReference<T> : System.WeakReference
     {
       public WeakReference(T target) : base(target)
