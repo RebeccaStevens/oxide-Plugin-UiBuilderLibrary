@@ -194,17 +194,21 @@ namespace Oxide.Plugins
     /// This data can then be mutated.
     /// </summary>
     /// <param name="player"></param>
+    /// <param name="store">If the player doesn't already have any data, store a new copy.</param>
     /// <returns></returns>
-    private PluginData.Structure GetPlayerData(BasePlayer player)
+    private PluginData.Structure GetPlayerData(BasePlayer player, bool store = true)
     {
       if (data.PlayerData.ContainsKey(player.userID))
         return data.PlayerData[player.userID];
 
-      return data.PlayerData[player.userID] = new PluginData.Structure()
+      var playerData = new PluginData.Structure()
       {
         RenderScale = config.data.DefaultRenderScale,
         ScreenAspectRatio = config.data.DefaultScreenAspectRatio,
       };
+      if (store)
+        data.PlayerData[player.userID] = playerData;
+      return playerData;
     }
 
     #endregion Config and Data
@@ -218,7 +222,7 @@ namespace Oxide.Plugins
     /// <returns></returns>
     public double GetScreenAspectRatio(BasePlayer player)
     {
-      var playerData = GetPlayerData(player);
+      var playerData = GetPlayerData(player, false);
       return playerData.ScreenAspectRatio;
     }
 
@@ -240,7 +244,7 @@ namespace Oxide.Plugins
     /// <returns></returns>
     public double GetRenderScale(BasePlayer player)
     {
-      var playerData = GetPlayerData(player);
+      var playerData = GetPlayerData(player, false);
       return playerData.RenderScale;
     }
 
