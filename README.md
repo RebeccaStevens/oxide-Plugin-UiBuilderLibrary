@@ -29,8 +29,7 @@ Note: In order to use intellisense, make sure your code editor knows about this 
 ```cs
 // Requires: UiBuilderLibrary
 
-using System;
-using UnityEngine;
+using Oxide.Core.Libraries.Covalence;
 using static Oxide.Plugins.UiBuilderLibrary;
 
 namespace Oxide.Plugins
@@ -74,22 +73,27 @@ namespace Oxide.Plugins
         mainPanel.AddGrid((grid) => {
           grid.Rows = 3;
           grid.Columns = 4;
-          for (var i = 0; i < grid.Rows * grid.Columns; i++) {
+          for (var i = 0; i < grid.Rows * grid.Columns; i++)
+          {
             grid.AddCell((cell) => {
               // ...
             });
           }
         });
+
+        return false;
       });
     }
 
     [Command("open")]
-    private void OpenCommand(IPlayer player, string label, string[] args) {
+    private void OpenCommand(IPlayer player, string label, string[] args)
+    {
       MyUi.Open((BasePlayer)player.Object); // `Open` acts as refresh if the UI is already open.
     }
 
     [Command("close")]
-    private void CloseCommand(IPlayer player, string label, string[] args) {
+    private void CloseCommand(IPlayer player, string label, string[] args)
+    {
       MyUi.Close((BasePlayer)player.Object);
     }
   }
