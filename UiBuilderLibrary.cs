@@ -621,90 +621,6 @@ namespace Oxide.Plugins
         /// <returns></returns>
         public abstract IEnumerable<CuiElement> GetCuiElements();
       }
-
-      public class BoundingBox
-      {
-        private readonly Instance Parent;
-
-        public double MinX { get; set; } = 0;
-        public double MinY { get; set; } = 0;
-        public double MaxX { get; set; } = 1;
-        public double MaxY { get; set; } = 1;
-
-        public BoundingBox(Instance parent)
-        {
-          Parent = parent;
-        }
-
-        /// <summary>
-        /// Gets the aspect ratio of this element on the given player's screen.
-        /// </summary>
-        /// <param name="player"></param>
-        /// <returns></returns>
-        public double GetAspectRatio(BasePlayer player)
-        {
-          return GetRelativeWidth(player) / GetRelativeHeight(player);
-        }
-
-        /// <summary>
-        /// Get the width of this element (as a percentage of its parent's width).
-        /// </summary>
-        /// <returns></returns>
-        public double GetWidth()
-        {
-          return MaxX - MinX;
-        }
-
-        /// <summary>
-        /// Get the height of this element (as a percentage of its parent's height).
-        /// </summary>
-        /// <returns></returns>
-        public double GetHeight()
-        {
-          return MaxY - MinY;
-        }
-
-        /// <summary>
-        /// Get the width of this element as a percentage of the player's screen width.
-        /// </summary>
-        /// <param name="player"></param>
-        /// <returns></returns>
-        public double GetRelativeWidth(BasePlayer player)
-        {
-          if (Parent == null)
-          {
-            return GetWidth();
-          }
-          return GetWidth() * Parent.Bounds.GetRelativeWidth(player);
-        }
-
-        /// <summary>
-        /// Get the height of this element as a percentage of the player's screen **width** (not height).
-        /// </summary>
-        /// <param name="player"></param>
-        /// <returns></returns>
-        public double GetRelativeHeight(BasePlayer player)
-        {
-          if (Parent == null)
-          {
-            return GetHeight() / UI.GetScreenAspectRatio(player);
-          }
-          return GetHeight() * Parent.Bounds.GetRelativeHeight(player);
-        }
-
-        /// <summary>
-        /// Get the `CuiRectTransformComponent` this object represents.
-        /// </summary>
-        /// <returns></returns>
-        public CuiRectTransformComponent GetCuiComponent()
-        {
-          return new CuiRectTransformComponent()
-          {
-            AnchorMin = $"{MinX} {MinY}",
-            AnchorMax = $"{MaxX} {MaxY}",
-          };
-        }
-      }
     }
 
     /// <summary>
@@ -1330,6 +1246,90 @@ namespace Oxide.Plugins
           cell.Bounds.MinY = 1 - offsetY - height;
           cell.Bounds.MaxY = 1 - offsetY;
         }
+      }
+    }
+
+    public class BoundingBox
+    {
+      private readonly Element.Instance Parent;
+
+      public double MinX { get; set; } = 0;
+      public double MinY { get; set; } = 0;
+      public double MaxX { get; set; } = 1;
+      public double MaxY { get; set; } = 1;
+
+      public BoundingBox(Element.Instance parent)
+      {
+        Parent = parent;
+      }
+
+      /// <summary>
+      /// Gets the aspect ratio of this element on the given player's screen.
+      /// </summary>
+      /// <param name="player"></param>
+      /// <returns></returns>
+      public double GetAspectRatio(BasePlayer player)
+      {
+        return GetRelativeWidth(player) / GetRelativeHeight(player);
+      }
+
+      /// <summary>
+      /// Get the width of this element (as a percentage of its parent's width).
+      /// </summary>
+      /// <returns></returns>
+      public double GetWidth()
+      {
+        return MaxX - MinX;
+      }
+
+      /// <summary>
+      /// Get the height of this element (as a percentage of its parent's height).
+      /// </summary>
+      /// <returns></returns>
+      public double GetHeight()
+      {
+        return MaxY - MinY;
+      }
+
+      /// <summary>
+      /// Get the width of this element as a percentage of the player's screen width.
+      /// </summary>
+      /// <param name="player"></param>
+      /// <returns></returns>
+      public double GetRelativeWidth(BasePlayer player)
+      {
+        if (Parent == null)
+        {
+          return GetWidth();
+        }
+        return GetWidth() * Parent.Bounds.GetRelativeWidth(player);
+      }
+
+      /// <summary>
+      /// Get the height of this element as a percentage of the player's screen **width** (not height).
+      /// </summary>
+      /// <param name="player"></param>
+      /// <returns></returns>
+      public double GetRelativeHeight(BasePlayer player)
+      {
+        if (Parent == null)
+        {
+          return GetHeight() / UI.GetScreenAspectRatio(player);
+        }
+        return GetHeight() * Parent.Bounds.GetRelativeHeight(player);
+      }
+
+      /// <summary>
+      /// Get the `CuiRectTransformComponent` this object represents.
+      /// </summary>
+      /// <returns></returns>
+      public CuiRectTransformComponent GetCuiComponent()
+      {
+        return new CuiRectTransformComponent()
+        {
+          AnchorMin = $"{MinX} {MinY}",
+          AnchorMax = $"{MaxX} {MaxY}",
+        };
       }
     }
 
