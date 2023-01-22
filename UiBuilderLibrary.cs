@@ -4,6 +4,7 @@ using Oxide.Core.Libraries.Covalence;
 using Oxide.Game.Rust.Cui;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Runtime.Serialization;
 
@@ -314,7 +315,7 @@ namespace Oxide.Plugins
       /// <param name="player"></param>
       public void Open(BasePlayer player)
       {
-        var updatedElements = new List<Element.Instance>();
+        var updatedElements = new Collection<Element.Instance>();
         Root.Open(player, updatedElements, false);
 
         var rootIds = GetRootElementIds(updatedElements);
@@ -478,7 +479,7 @@ namespace Oxide.Plugins
       /// <param name="updatedElements"></param>
       /// <param name="parentHasUpdates"></param>
       /// <returns>The id of the element instance that was opened.</returns>
-      public abstract string Open(BasePlayer player, List<Instance> updatedElements, bool parentHasUpdates);
+      public abstract string Open(BasePlayer player, Collection<Instance> updatedElements, bool parentHasUpdates);
 
       /// <summary>
       /// Close this element for the given player.
@@ -539,7 +540,7 @@ namespace Oxide.Plugins
         /// <param name="updatedElements"></param>
         /// <param name="parentHasUpdates"></param>
         /// <exception cref="Exception"></exception>
-        public void Open(List<Instance> updatedElements, bool parentHasUpdates)
+        public void Open(Collection<Instance> updatedElements, bool parentHasUpdates)
         {
           BuildingChildIndex = 0;
           var hasUpdates = Render() || parentHasUpdates || !IsOpen;
@@ -651,7 +652,7 @@ namespace Oxide.Plugins
       /// <param name="updatedElements"></param>
       /// <param name="parentHasUpdates"></param>
       /// <returns>The id of the element instance that was opened.</returns>
-      public override string Open(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
+      public override string Open(BasePlayer player, Collection<Element.Instance> updatedElements, bool parentHasUpdates)
       {
         var instance = EnsureInstance(player);
         instance.Open(updatedElements, parentHasUpdates);
@@ -706,7 +707,7 @@ namespace Oxide.Plugins
       /// <param name="updatedElements"></param>
       /// <param name="parentHasUpdates"></param>
       /// <returns>The id of the element instance that was opened.</returns>
-      public override string Open(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
+      public override string Open(BasePlayer player, Collection<Element.Instance> updatedElements, bool parentHasUpdates)
       {
         InstanceCache[player.userID].Open(updatedElements, parentHasUpdates);
         return InstanceCache[player.userID].Id;
@@ -824,7 +825,7 @@ namespace Oxide.Plugins
       /// <param name="updatedElements"></param>
       /// <param name="parentHasUpdates"></param>
       /// <returns>The id of the element instance that was opened.</returns>
-      public override string Open(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
+      public override string Open(BasePlayer player, Collection<Element.Instance> updatedElements, bool parentHasUpdates)
       {
         InstanceCache[player.userID].Open(updatedElements, parentHasUpdates);
         return InstanceCache[player.userID].Id;
@@ -894,7 +895,7 @@ namespace Oxide.Plugins
       /// <param name="updatedElements"></param>
       /// <param name="parentHasUpdates"></param>
       /// <returns>The id of the element instance that was opened.</returns>
-      public override string Open(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
+      public override string Open(BasePlayer player, Collection<Element.Instance> updatedElements, bool parentHasUpdates)
       {
         InstanceCache[player.userID].Open(updatedElements, parentHasUpdates);
         return InstanceCache[player.userID].Id;
@@ -981,7 +982,7 @@ namespace Oxide.Plugins
       /// <param name="updatedElements"></param>
       /// <param name="parentHasUpdates"></param>
       /// <returns>The id of the element instance that was opened.</returns>
-      public override string Open(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
+      public override string Open(BasePlayer player, Collection<Element.Instance> updatedElements, bool parentHasUpdates)
       {
         InstanceCache[player.userID].Open(updatedElements, parentHasUpdates);
         return InstanceCache[player.userID].Id;
@@ -1050,7 +1051,7 @@ namespace Oxide.Plugins
       /// <param name="updatedElements"></param>
       /// <param name="parentHasUpdates"></param>
       /// <returns>The id of the element instance that was opened.</returns>
-      public override string Open(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
+      public override string Open(BasePlayer player, Collection<Element.Instance> updatedElements, bool parentHasUpdates)
       {
         InstanceCache[player.userID].Open(updatedElements, parentHasUpdates);
         return InstanceCache[player.userID].Id;
