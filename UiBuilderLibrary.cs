@@ -1,5 +1,3 @@
-#define DEBUG
-
 using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
@@ -7,6 +5,7 @@ using Oxide.Game.Rust.Cui;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.Serialization;
 using static Oxide.Plugins.UiBuilderLibrary.Element.Instance;
 
 namespace Oxide.Plugins
@@ -26,7 +25,7 @@ namespace Oxide.Plugins
     {
 #if DEBUG
       if (SelfRef != null)
-        throw new Exception("Self already defined.");
+        Interface.Oxide.LogWarning("Self already defined.");
 #endif
       SelfRef = this;
       config = new PluginConfig(this);
@@ -54,7 +53,7 @@ namespace Oxide.Plugins
     private void OnUserDisconnected(IPlayer player)
     {
       foreach (var ui in UI.GetAllUis())
-        ui.Clear((BasePlayer)player.Object);
+        ui.Close((BasePlayer)player.Object, false);
     }
 
     protected override void SaveConfig()
@@ -117,7 +116,6 @@ namespace Oxide.Plugins
       /// </summary>
       private void SaveSerializable<T>(string file, T sData)
       {
-        Interface.Oxide.LogDebug("Saving");
         plugin.Config.WriteObject(sData, false, string.IsNullOrEmpty(file) ? $"oxide/config/{plugin.Name}.json" : $"oxide/config/{plugin.Name}/{file}.json");
       }
 
@@ -277,7 +275,7 @@ namespace Oxide.Plugins
       /// </summary>
       /// <param name="parentId">The parent of this UI. For top-level UIs, one of: "Overlay", "Hud.Menu", "Hud" or "Under"</param>
       /// <param name="rootBuilder">Callback function that builds the UI.</param>
-      public UI(string parentId, RootElement.RenderUi rootBuilder)
+      public UI(string parentId, RenderUi<RootElement.Instance> rootBuilder)
       {
         Root = new RootElement(parentId, rootBuilder);
         AllUis.Add(new WeakReference<UI>(this));
@@ -294,8 +292,8 @@ namespace Oxide.Plugins
 
         foreach (var uiRef in AllUis)
         {
-          UI ui;
-          if (uiRef.TryGetTarget(out ui))
+          UI ui = uiRef.Target;
+          if (ui != null)
             foundUis.Add(ui);
           else
             missingUis.Add(uiRef);
@@ -314,35 +312,35 @@ namespace Oxide.Plugins
       public void Open(BasePlayer player)
       {
         var updatedElements = new List<Element.Instance>();
-        Root.Build(player, updatedElements, false);
-        var root = Root.GetInstance<RootElement.Instance>(player);
+        Root.Open(player, updatedElements, false);
 
-        var roots = GetRootElements(updatedElements);
-        var jsonObjects = updatedElements.SelectMany(element => ToJson(element, roots)).ToArray();
+        var rootIds = GetRootElementIds(updatedElements);
+        var jsonObjects = updatedElements.SelectMany(element => ToJson(element, rootIds)).ToArray();
         if (jsonObjects.Length == 0)
         {
+#if DEBUG
           Interface.Oxide.LogDebug("Nothing to display/remove.");
+#endif
           return;
         }
 
         var json = $"[{string.Join(",", jsonObjects)}]";
         CuiHelper.AddUi(player, json);
-        root.Open = true;
       }
 
       /// <summary>
       /// Close this UI for the given player.
       /// </summary>
       /// <param name="player"></param>
-      public void Close(BasePlayer player)
+      /// <param name="sendCommand">Send a command to the client to close the UI.</param>
+      public void Close(BasePlayer player, bool sendCommand = true)
       {
-        var root = Root.GetInstance<RootElement.Instance>(player);
-        if (root == null)
+        var id = Root.Close(player);
+
+        if (!sendCommand)
           return;
 
-        root.Clear();
-        CuiHelper.DestroyUi(player, root.Id);
-        root.Open = false;
+        CuiHelper.DestroyUi(player, id);
       }
 
       /// <summary>
@@ -354,15 +352,6 @@ namespace Oxide.Plugins
         {
           Close(player);
         }
-      }
-
-      /// <summary>
-      /// Clear any internally stored UI data for this player.
-      /// </summary>
-      /// <param name="player"></param>
-      internal void Clear(BasePlayer player)
-      {
-        Root.Clear(player);
       }
 
       /// <summary>
@@ -439,7 +428,7 @@ namespace Oxide.Plugins
       /// </summary>
       /// <param name="elements"></param>
       /// <returns></returns>
-      private static HashSet<string> GetRootElements(IEnumerable<Element.Instance> elements)
+      private static HashSet<string> GetRootElementIds(IEnumerable<Element.Instance> elements)
       {
         var names = new HashSet<string>(elements.Select(element => element.Id));
         return new HashSet<string>(elements.Where(element => !names.Contains(element.GetParentId())).Select(element => element.Id));
@@ -451,7 +440,7 @@ namespace Oxide.Plugins
     /// </summary>
     public abstract class Element
     {
-      protected readonly Dictionary<ulong, Instance> InstanceCache = new Dictionary<ulong, Instance>();
+      protected readonly HardWeakValueDictionary<ulong, Instance> InstanceCache = new HardWeakValueDictionary<ulong, Instance>();
 
       // `Parent` should be null if `ParentId` is set.
       private readonly string ParentId;
@@ -478,29 +467,31 @@ namespace Oxide.Plugins
       public T GetInstance<T>(BasePlayer player) where T : Instance
       {
         Instance instance = null;
-        return InstanceCache.TryGetValue(player.userID, out instance) ? (T)instance : null;
+        return InstanceCache.TryGetValueAndMakeHard(player.userID, out instance) ? (T)instance : null;
       }
 
       /// <summary>
-      /// Build this element for the given player.
+      /// Open this element for the given player.
       /// </summary>
       /// <param name="player"></param>
       /// <param name="updatedElements"></param>
       /// <param name="parentHasUpdates"></param>
-      /// <exception cref="Exception"></exception>
-      public abstract void Build(BasePlayer player, List<Instance> updatedElements, bool parentHasUpdates);
+      /// <returns>The id of the element instance that was opened.</returns>
+      public abstract string Open(BasePlayer player, List<Instance> updatedElements, bool parentHasUpdates);
 
       /// <summary>
-      /// Clear any internally stored data for this player.
+      /// Close this element for the given player.
       /// </summary>
       /// <param name="player"></param>
-      public void Clear(BasePlayer player)
+      /// <returns>The id of the element instance that was closed.</returns>
+      public string Close(BasePlayer player)
       {
         if (!InstanceCache.ContainsKey(player.userID))
-          return;
+          return null;
 
-        InstanceCache[player.userID].Clear();
-        InstanceCache.Remove(player.userID);
+        var instance = InstanceCache.GetValueAndMakeWeak(player.userID); ;
+        instance.Close();
+        return instance.Id;
       }
 
       /// <summary>
@@ -509,7 +500,7 @@ namespace Oxide.Plugins
       public abstract class Instance
       {
         /// <summary>
-        /// Build an Element for the given player.
+        /// Render the element for the given player.
         /// </summary>
         /// <typeparam name="T">The type of instance being rendered.</typeparam>
         /// <param name="instance">The instance being rendered.</param>
@@ -526,6 +517,7 @@ namespace Oxide.Plugins
 
         protected readonly List<Element> Children = new List<Element>();
         private int BuildingChildIndex = 0;
+        internal bool IsOpen = false;
         internal bool Initialized;
 
         public Instance(Element element, BasePlayer player)
@@ -547,34 +539,17 @@ namespace Oxide.Plugins
           return Parent?.Id ?? Element.ParentId;
         }
 
-        public bool IsOpen()
-        {
-          return IsOpen(this);
-        }
-
-        private bool IsOpen(Instance instance)
-        {
-          if (instance == null)
-            return false;
-
-          if (instance.GetType() != typeof(RootElement.Instance))
-            return IsOpen(instance.Element.Parent.GetInstance<Instance>(Player));
-
-          var root = (RootElement.Instance)instance;
-          return root.Open;
-        }
-
         /// <summary>
-        /// Build this element instance and its children.
+        /// Open this element instance and its children.
         /// </summary>
         /// <param name="player"></param>
         /// <param name="updatedElements"></param>
         /// <param name="parentHasUpdates"></param>
         /// <exception cref="Exception"></exception>
-        public void Build(List<Instance> updatedElements, bool parentHasUpdates)
+        public void Open(List<Instance> updatedElements, bool parentHasUpdates)
         {
           BuildingChildIndex = 0;
-          var hasUpdates = Render() || parentHasUpdates || !IsOpen();
+          var hasUpdates = Render() || parentHasUpdates || !IsOpen;
 
           if (hasUpdates)
             updatedElements.Add(this);
@@ -586,8 +561,9 @@ namespace Oxide.Plugins
 
           if (Visible)
             foreach (var child in Children)
-              child.Build(Player, updatedElements, hasUpdates);
+              child.Open(Player, updatedElements, hasUpdates);
 
+          IsOpen = true;
           Initialized = true;
         }
 
@@ -599,12 +575,13 @@ namespace Oxide.Plugins
         public abstract bool Render();
 
         /// <summary>
-        /// Clear any internally stored data.
+        /// Mark this instance as closed Clear any internally stored data.
         /// </summary>
-        public void Clear()
+        public void Close()
         {
+          IsOpen = false;
           foreach (var child in Children)
-            child.Clear(Player);
+            child.Close(Player);
         }
 
         /// <summary>
@@ -740,37 +717,40 @@ namespace Oxide.Plugins
     /// </summary>
     public class RootElement : PanelElement
     {
-      public delegate bool RenderUi(Instance panel, BasePlayer player);
+      protected internal RenderUi<Instance> Renderer;
 
-      protected internal RenderUi Renderer;
-
-      internal RootElement(string parentId, RenderUi renderer) : base(parentId)
+      internal RootElement(string parentId, RenderUi<Instance> renderer) : base(parentId)
       {
         Renderer = renderer;
       }
 
-      public Instance GetOrCreateInstance(BasePlayer player)
+      public Instance EnsureInstance(BasePlayer player)
       {
-        return GetInstance<Instance>(player) ?? new Instance(this, player);
+        var instance = GetInstance<Instance>(player);
+        if (instance != null)
+          return instance;
+
+        instance = new Instance(this, player);
+        InstanceCache.Add(player.userID, instance, true);
+        return instance;
       }
 
       /// <summary>
-      /// Build this element for the given player.
+      /// Open this element for the given player.
       /// </summary>
       /// <param name="player"></param>
       /// <param name="updatedElements"></param>
       /// <param name="parentHasUpdates"></param>
-      /// <exception cref="Exception"></exception>
-      public override void Build(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
+      /// <returns>The id of the element instance that was opened.</returns>
+      public override string Open(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
       {
-        InstanceCache[player.userID] = GetOrCreateInstance(player);
-        InstanceCache[player.userID].Build(updatedElements, parentHasUpdates);
+        var instance = EnsureInstance(player);
+        instance.Open(updatedElements, parentHasUpdates);
+        return instance.Id;
       }
 
       public new class Instance : PanelElement.Instance
       {
-        internal bool Open = false;
-
         internal Instance(Element element, BasePlayer player) : base(element, player, null)
         {
         }
@@ -778,7 +758,7 @@ namespace Oxide.Plugins
         public override bool Render()
         {
           var renderer = ((RootElement)Element).Renderer;
-          return renderer(this, Player);
+          return renderer(this);
         }
       }
     }
@@ -796,28 +776,31 @@ namespace Oxide.Plugins
       {
       }
 
-      public Instance GetOrCreateInstance(BasePlayer player, RenderUi<Instance> renderer)
+      public Instance EnsureInstance(BasePlayer player, RenderUi<Instance> renderer)
       {
         var instance = GetInstance<Instance>(player);
-        if (instance == null)
-          instance = new Instance(this, player, renderer);
-        else
+        if (instance != null)
+        {
           instance.Renderer = renderer;
+          return instance;
+        }
 
-        InstanceCache[player.userID] = instance;
+        instance = new Instance(this, player, renderer);
+        InstanceCache.Add(player.userID, instance, true);
         return instance;
       }
 
       /// <summary>
-      /// Build this element for the given player.
+      /// Open this element for the given player.
       /// </summary>
       /// <param name="player"></param>
       /// <param name="updatedElements"></param>
       /// <param name="parentHasUpdates"></param>
-      /// <exception cref="Exception"></exception>
-      public override void Build(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
+      /// <returns>The id of the element instance that was opened.</returns>
+      public override string Open(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
       {
-        InstanceCache[player.userID].Build(updatedElements, parentHasUpdates);
+        InstanceCache[player.userID].Open(updatedElements, parentHasUpdates);
+        return InstanceCache[player.userID].Id;
       }
 
       public new class Instance : Element.Instance
@@ -861,43 +844,43 @@ namespace Oxide.Plugins
         public void AddPanel(RenderUi<Instance> renderer)
         {
           PanelElement element = Initialized ? AddChild<PanelElement>() : AddChild(new PanelElement(Element));
-          element.GetOrCreateInstance(Player, renderer);
+          element.EnsureInstance(Player, renderer);
         }
 
         public void AddLabel(RenderUi<LabelElement.Instance> renderer)
         {
           LabelElement element = Initialized ? AddChild<LabelElement>() : AddChild(new LabelElement(Element));
-          element.GetOrCreateInstance(Player, renderer);
+          element.EnsureInstance(Player, renderer);
         }
 
         public void AddButton(RenderUi<ButtonElement.Instance> renderer)
         {
           ButtonElement element = Initialized ? AddChild<ButtonElement>() : AddChild(new ButtonElement(Element));
-          element.GetOrCreateInstance(Player, renderer);
+          element.EnsureInstance(Player, renderer);
         }
 
         public void AddGameImage(RenderUi<GameImageElement.Instance> renderer)
         {
           GameImageElement element = Initialized ? AddChild<GameImageElement>() : AddChild(new GameImageElement(Element));
-          element.GetOrCreateInstance(Player, renderer);
+          element.EnsureInstance(Player, renderer);
         }
 
         public void AddRawImage(RenderUi<RawImageElement.Instance> renderer)
         {
           RawImageElement element = Initialized ? AddChild<RawImageElement>() : AddChild(new RawImageElement(Element));
-          element.GetOrCreateInstance(Player, renderer);
+          element.EnsureInstance(Player, renderer);
         }
 
         public void AddTabs(RenderUi<TabsElement.Instance> renderer)
         {
           TabsElement element = Initialized ? AddChild<TabsElement>() : AddChild(new TabsElement(Element));
-          element.GetOrCreateInstance(Player, renderer);
+          element.EnsureInstance(Player, renderer);
         }
 
         public void AddGrid(RenderUi<GridElement.Instance> renderer)
         {
           GridElement element = Initialized ? AddChild<GridElement>() : AddChild(new GridElement(Element));
-          element.GetOrCreateInstance(Player, renderer);
+          element.EnsureInstance(Player, renderer);
         }
       }
     }
@@ -911,28 +894,31 @@ namespace Oxide.Plugins
       {
       }
 
-      public Instance GetOrCreateInstance(BasePlayer player, RenderUi<Instance> renderer)
+      public Instance EnsureInstance(BasePlayer player, RenderUi<Instance> renderer)
       {
         var instance = GetInstance<Instance>(player);
-        if (instance == null)
-          instance = new Instance(this, player, renderer);
-        else
+        if (instance != null)
+        {
           instance.Renderer = renderer;
+          return instance;
+        }
 
-        InstanceCache[player.userID] = instance;
+        instance = new Instance(this, player, renderer);
+        InstanceCache.Add(player.userID, instance, true);
         return instance;
       }
 
       /// <summary>
-      /// Build this element for the given player.
+      /// Open this element for the given player.
       /// </summary>
       /// <param name="player"></param>
       /// <param name="updatedElements"></param>
       /// <param name="parentHasUpdates"></param>
-      /// <exception cref="Exception"></exception>
-      public override void Build(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
+      /// <returns>The id of the element instance that was opened.</returns>
+      public override string Open(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
       {
-        InstanceCache[player.userID].Build(updatedElements, parentHasUpdates);
+        InstanceCache[player.userID].Open(updatedElements, parentHasUpdates);
+        return InstanceCache[player.userID].Id;
       }
 
       public new class Instance : Element.Instance
@@ -978,28 +964,31 @@ namespace Oxide.Plugins
       {
       }
 
-      public Instance GetOrCreateInstance(BasePlayer player, RenderUi<Instance> renderer)
+      public Instance EnsureInstance(BasePlayer player, RenderUi<Instance> renderer)
       {
         var instance = GetInstance<Instance>(player);
-        if (instance == null)
-          instance = new Instance(this, player, renderer);
-        else
+        if (instance != null)
+        {
           instance.Renderer = renderer;
+          return instance;
+        }
 
-        InstanceCache[player.userID] = instance;
+        instance = new Instance(this, player, renderer);
+        InstanceCache.Add(player.userID, instance, true);
         return instance;
       }
 
       /// <summary>
-      /// Build this element for the given player.
+      /// Open this element for the given player.
       /// </summary>
       /// <param name="player"></param>
       /// <param name="updatedElements"></param>
       /// <param name="parentHasUpdates"></param>
-      /// <exception cref="Exception"></exception>
-      public override void Build(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
+      /// <returns>The id of the element instance that was opened.</returns>
+      public override string Open(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
       {
-        InstanceCache[player.userID].Build(updatedElements, parentHasUpdates);
+        InstanceCache[player.userID].Open(updatedElements, parentHasUpdates);
+        return InstanceCache[player.userID].Id;
       }
 
       public new class Instance : Element.Instance
@@ -1062,28 +1051,31 @@ namespace Oxide.Plugins
       {
       }
 
-      public Instance GetOrCreateInstance(BasePlayer player, RenderUi<Instance> renderer)
+      public Instance EnsureInstance(BasePlayer player, RenderUi<Instance> renderer)
       {
         var instance = GetInstance<Instance>(player);
-        if (instance == null)
-          instance = new Instance(this, player, renderer);
-        else
+        if (instance != null)
+        {
           instance.Renderer = renderer;
+          return instance;
+        }
 
-        InstanceCache[player.userID] = instance;
+        instance = new Instance(this, player, renderer);
+        InstanceCache.Add(player.userID, instance, true);
         return instance;
       }
 
       /// <summary>
-      /// Build this element for the given player.
+      /// Open this element for the given player.
       /// </summary>
       /// <param name="player"></param>
       /// <param name="updatedElements"></param>
       /// <param name="parentHasUpdates"></param>
-      /// <exception cref="Exception"></exception>
-      public override void Build(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
+      /// <returns>The id of the element instance that was opened.</returns>
+      public override string Open(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
       {
-        InstanceCache[player.userID].Build(updatedElements, parentHasUpdates);
+        InstanceCache[player.userID].Open(updatedElements, parentHasUpdates);
+        return InstanceCache[player.userID].Id;
       }
 
       public new class Instance : Element.Instance
@@ -1128,28 +1120,31 @@ namespace Oxide.Plugins
       {
       }
 
-      public Instance GetOrCreateInstance(BasePlayer player, RenderUi<Instance> renderer)
+      public Instance EnsureInstance(BasePlayer player, RenderUi<Instance> renderer)
       {
         var instance = GetInstance<Instance>(player);
-        if (instance == null)
-          instance = new Instance(this, player, renderer);
-        else
+        if (instance != null)
+        {
           instance.Renderer = renderer;
+          return instance;
+        }
 
-        InstanceCache[player.userID] = instance;
+        instance = new Instance(this, player, renderer);
+        InstanceCache.Add(player.userID, instance, true);
         return instance;
       }
 
       /// <summary>
-      /// Build this element for the given player.
+      /// Open this element for the given player.
       /// </summary>
       /// <param name="player"></param>
       /// <param name="updatedElements"></param>
       /// <param name="parentHasUpdates"></param>
-      /// <exception cref="Exception"></exception>
-      public override void Build(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
+      /// <returns>The id of the element instance that was opened.</returns>
+      public override string Open(BasePlayer player, List<Element.Instance> updatedElements, bool parentHasUpdates)
       {
-        InstanceCache[player.userID].Build(updatedElements, parentHasUpdates);
+        InstanceCache[player.userID].Open(updatedElements, parentHasUpdates);
+        return InstanceCache[player.userID].Id;
       }
 
       public new class Instance : Element.Instance
@@ -1193,15 +1188,17 @@ namespace Oxide.Plugins
       {
       }
 
-      public Instance GetOrCreateInstance(BasePlayer player, RenderUi<Instance> renderer)
+      public Instance EnsureInstance(BasePlayer player, RenderUi<Instance> renderer)
       {
         var instance = GetInstance<Instance>(player);
-        if (instance == null)
-          instance = new Instance(this, player, renderer);
-        else
+        if (instance != null)
+        {
           instance.Renderer = renderer;
+          return instance;
+        }
 
-        InstanceCache[player.userID] = instance;
+        instance = new Instance(this, player, renderer);
+        InstanceCache.Add(player.userID, instance, true);
         return instance;
       }
 
@@ -1276,15 +1273,17 @@ namespace Oxide.Plugins
       {
       }
 
-      public Instance GetOrCreateInstance(BasePlayer player, RenderUi<Instance> renderer)
+      public Instance EnsureInstance(BasePlayer player, RenderUi<Instance> renderer)
       {
         var instance = GetInstance<Instance>(player);
-        if (instance == null)
-          instance = new Instance(this, player, renderer);
-        else
+        if (instance != null)
+        {
           instance.Renderer = renderer;
+          return instance;
+        }
 
-        InstanceCache[player.userID] = instance;
+        instance = new Instance(this, player, renderer);
+        InstanceCache.Add(player.userID, instance, true);
         return instance;
       }
 
@@ -1340,5 +1339,321 @@ namespace Oxide.Plugins
     }
 
     #endregion API classes
+
+    #region Collections
+
+    /// <summary>
+    /// A dictionary in which the values can be marked as weak references.
+    /// </summary>
+    /// <typeparam name="TKey"></typeparam>
+    /// <typeparam name="TValue"></typeparam>
+    public class HardWeakValueDictionary<TKey, TValue> where TValue : class // : IDictionary<TKey, TValue>
+    {
+      private Dictionary<TKey, HardWeakReference<TValue>> _dict = new Dictionary<TKey, HardWeakReference<TValue>>();
+      private int _version, _cleanVersion;
+      private int _cleanGeneration;
+      private const int MinRehashInterval = 500;
+
+      public ICollection<TKey> Keys => _dict.Keys;
+
+      public ICollection<TValue> Values
+      { get { throw new NotImplementedException(); } }
+
+      public int Count => _dict.Count;
+
+      public bool IsReadOnly => false;
+
+      public TValue this[TKey key]
+      {
+        get
+        {
+#if DEBUG
+          if (!_dict[key].IsHard)
+            throw new Exception("Do not access via index when weak.");
+#endif
+          return _dict[key].GetTarget();
+        }
+        set
+        {
+          _dict[key] = new HardWeakReference<TValue>(value);
+        }
+      }
+
+      public HardWeakValueDictionary()
+      {
+      }
+
+      public void Add(TKey key, TValue value)
+      {
+        Add(key, value, true);
+      }
+
+      public void Add(TKey key, TValue value, bool hard)
+      {
+        AutoCleanup(2);
+
+        HardWeakReference<TValue> reference;
+        if (_dict.TryGetValue(key, out reference))
+        {
+          if (reference.IsAlive)
+            throw new ArgumentException("An element with the same key already exists in this dictionary");
+
+          reference.SetTarget(value);
+          if (hard)
+            reference.MakeHard();
+
+          return;
+        }
+
+        _dict.Add(key, new HardWeakReference<TValue>(value, hard));
+      }
+
+      public bool MakeWeak(TKey key)
+      {
+        AutoCleanup(1);
+
+        HardWeakReference<TValue> reference;
+        if (!_dict.TryGetValue(key, out reference))
+          return false;
+        return reference.MakeWeak();
+      }
+
+      public bool MakeHard(TKey key)
+      {
+        AutoCleanup(1);
+
+        HardWeakReference<TValue> reference;
+        if (!_dict.TryGetValue(key, out reference))
+          return false;
+        return reference.MakeHard();
+      }
+
+      public bool ContainsKey(TKey key)
+      {
+        AutoCleanup(1);
+
+        HardWeakReference<TValue> value;
+        if (!_dict.TryGetValue(key, out value))
+          return false;
+        return value.IsAlive;
+      }
+
+      public bool Remove(TKey key)
+      {
+        AutoCleanup(1);
+
+        HardWeakReference<TValue> reference;
+        if (!_dict.TryGetValue(key, out reference))
+          return false;
+        _dict.Remove(key);
+        return reference.IsAlive;
+      }
+
+      public bool TryGetValue(TKey key, out TValue value)
+      {
+        AutoCleanup(1);
+
+        HardWeakReference<TValue> reference;
+        if (_dict.TryGetValue(key, out reference))
+          value = reference.GetTarget();
+        else
+          value = null;
+        return value != null;
+      }
+
+      public bool TryGetValueAndMakeHard(TKey key, out TValue value)
+      {
+        AutoCleanup(1);
+
+        HardWeakReference<TValue> reference;
+        if (_dict.TryGetValue(key, out reference))
+          value = reference.GetTarget();
+        else
+          value = null;
+        if (value == null)
+          return false;
+        return reference.MakeHard();
+      }
+
+      public TValue GetValueAndMakeWeak(TKey key)
+      {
+        var reference = _dict[key];
+        var value = reference.GetTarget();
+        reference.MakeWeak();
+        return value;
+      }
+
+      public void Add(KeyValuePair<TKey, TValue> item)
+      {
+        Add(item.Key, item.Value);
+      }
+
+      public void Clear()
+      {
+        _dict.Clear();
+        _version = _cleanVersion = 0;
+        _cleanGeneration = 0;
+      }
+
+      public bool Contains(KeyValuePair<TKey, TValue> item)
+      {
+        throw new NotImplementedException();
+      }
+
+      public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
+      {
+        throw new NotImplementedException();
+      }
+
+      public bool Remove(KeyValuePair<TKey, TValue> item)
+      {
+        throw new NotImplementedException();
+      }
+
+      public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator()
+      {
+        int nullCount = 0;
+
+        foreach (KeyValuePair<TKey, HardWeakReference<TValue>> kvp in _dict)
+        {
+          TValue target = kvp.Value.GetTarget();
+          if (target == null)
+            nullCount++;
+          else
+            yield return new KeyValuePair<TKey, TValue>(kvp.Key, target);
+        }
+
+        if (nullCount > _dict.Count / 4)
+          Cleanup();
+      }
+
+      //IEnumerator IEnumerable.GetEnumerator()
+      //{
+      //  return GetEnumerator();
+      //}
+
+      private void AutoCleanup(int incVersion)
+      {
+        _version += incVersion;
+
+        // Cleanup the table every so often--less often for larger tables.
+        long delta = _version - _cleanVersion;
+        if (delta > MinRehashInterval + _dict.Count)
+        {
+          // A cleanup will be fruitless unless a GC has happened in the meantime.
+          // WeakReferences can become zero only during the GC.
+          int curGeneration = GC.CollectionCount(0);
+          if (_cleanGeneration != curGeneration)
+          {
+            _cleanGeneration = curGeneration;
+            Cleanup();
+            _cleanVersion = _version;
+          }
+          else
+            _cleanVersion += MinRehashInterval; // Wait a little while longer
+        }
+      }
+
+      private void Cleanup()
+      {
+        // Remove all pairs whose value is nullified.
+        // Due to the fact that you can't change a Dictionary while enumerating
+        // it, we need an intermediate collection (the list of things to delete):
+        List<TKey> deadKeys = new List<TKey>();
+
+        foreach (KeyValuePair<TKey, HardWeakReference<TValue>> kvp in _dict)
+          if (!kvp.Value.IsAlive)
+            deadKeys.Add(kvp.Key);
+
+        foreach (TKey key in deadKeys)
+        {
+          _dict.Remove(key);
+        }
+      }
+    }
+
+    #endregion Collections
+
+    #region References
+
+    /// <summary>
+    /// A weak reference to an object of type `T`.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    public class WeakReference<T> : System.WeakReference
+    {
+      public WeakReference(T target) : base(target)
+      {
+      }
+
+      public WeakReference(T target, bool trackResurrection) : base(target, trackResurrection)
+      {
+      }
+
+      protected WeakReference(SerializationInfo info, StreamingContext context) : base(info, context)
+      {
+      }
+
+      public new T Target
+      {
+        get { return (T)base.Target; }
+        set { base.Target = value; }
+      }
+    }
+
+    /// <summary>
+    /// A reference to an object of type `T` that can be toggled between a hard and weak reference.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    public class HardWeakReference<T> where T : class
+    {
+      public T Hard { get; private set; }
+      public WeakReference<T> Weak { get; private set; }
+
+      public bool IsHard
+      { get { return Hard != null; } }
+
+      public bool IsAlive
+      { get { return IsHard || Weak.IsAlive; } }
+
+      public HardWeakReference(T reference, bool hard = true)
+      {
+        if (hard)
+          Hard = reference;
+        Weak = new WeakReference<T>(reference);
+      }
+
+      public T GetTarget()
+      {
+        if (IsHard)
+          return Hard;
+        return Weak.Target;
+      }
+
+      public void SetTarget(T target)
+      {
+        Weak.Target = target;
+        if (IsHard)
+        {
+          Hard = target;
+        }
+      }
+
+      public bool MakeHard()
+      {
+        if (IsHard)
+          return true;
+        Hard = Weak.Target;
+        return IsAlive;
+      }
+
+      public bool MakeWeak()
+      {
+        Hard = null;
+        return IsAlive;
+      }
+    }
+
+    #endregion References
   }
 }

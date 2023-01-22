@@ -20,7 +20,7 @@ Default configuration:
 ## Example
 
 ```cs
-var MyUi = new UI("Overlay", (rootPanel, player) =>
+var MyUi = new UI("Overlay", (rootPanel) =>
 {
   rootPanel.CursorEnabled = true;
   rootPanel.Image.Color = "1 1 1 0.5";
@@ -72,14 +72,14 @@ This function should perform all of the changes that you want to apply to the el
 This includes setting the element's bounds, color and children.
 
 The render function must return a boolean.
-This boolean indicates whether or not the element's content has changed since the last rendering of the element (it has no effect for the first render).
+This boolean is only used when refreshing the content of an already open element.
+It indicates whether or not the element's content has changed since it was last rendered (it has no effect when opening a closed element).
 
 ## Dos and Don'ts
 
 Each rendering of an element must add all the same children in the same order. You cannot dynamically add or remove them.
 
 ❌ Don't
-
 ```cs
 if (comeCondition) {
   rootPanel.AddPanel((panel) => {});
@@ -87,7 +87,6 @@ if (comeCondition) {
 ```
 
 ✅ Do
-
 ```cs
 rootPanel.AddPanel((panel) => {
   panel.Visible = comeCondition
