@@ -78,13 +78,13 @@ namespace Oxide.Plugins
     private class PluginConfig
     {
       // The plugin.
-      private readonly UiBuilderLibrary plugin;
+      private readonly UiBuilderLibrary Plugin;
 
-      public Data data;
+      public ConfigData Data;
 
       public PluginConfig(UiBuilderLibrary plugin)
       {
-        this.plugin = plugin;
+        Plugin = plugin;
       }
 
       /// <summary>
@@ -92,7 +92,7 @@ namespace Oxide.Plugins
       /// </summary>
       public void Save()
       {
-        SaveSerializable(data);
+        SaveSerializable(Data);
       }
 
       /// <summary>
@@ -100,7 +100,7 @@ namespace Oxide.Plugins
       /// </summary>
       public void Load()
       {
-        data = LoadSerializable<Data>();
+        Data = LoadSerializable<ConfigData>();
       }
 
       /// <summary>
@@ -116,7 +116,7 @@ namespace Oxide.Plugins
       /// </summary>
       private void SaveSerializable<T>(string file, T sData)
       {
-        plugin.Config.WriteObject(sData, false, string.IsNullOrEmpty(file) ? $"oxide/config/{plugin.Name}.json" : $"oxide/config/{plugin.Name}/{file}.json");
+        Plugin.Config.WriteObject(sData, false, string.IsNullOrEmpty(file) ? $"oxide/config/{Plugin.Name}.json" : $"oxide/config/{Plugin.Name}/{file}.json");
       }
 
       /// <summary>
@@ -132,13 +132,13 @@ namespace Oxide.Plugins
       /// </summary>
       private T LoadSerializable<T>(string file)
       {
-        return plugin.Config.ReadObject<T>(string.IsNullOrEmpty(file) ? $"oxide/config/{plugin.Name}.json" : $"oxide/config/{plugin.Name}/{file}.json");
+        return Plugin.Config.ReadObject<T>(string.IsNullOrEmpty(file) ? $"oxide/config/{Plugin.Name}.json" : $"oxide/config/{Plugin.Name}/{file}.json");
       }
 
       /// <summary>
       /// The config data for this plugin.
       /// </summary>
-      public class Data
+      public class ConfigData
       {
         public double DefaultScreenAspectRatio = 16.0 / 9.0;
         public double DefaultRenderScale = 1.0;
@@ -203,8 +203,8 @@ namespace Oxide.Plugins
 
       var playerData = new PluginData.Structure()
       {
-        RenderScale = config.data.DefaultRenderScale,
-        ScreenAspectRatio = config.data.DefaultScreenAspectRatio,
+        RenderScale = config.Data.DefaultRenderScale,
+        ScreenAspectRatio = config.Data.DefaultScreenAspectRatio,
       };
       if (store)
         data.PlayerData[player.userID] = playerData;
