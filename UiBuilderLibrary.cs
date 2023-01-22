@@ -10,7 +10,7 @@ using static Oxide.Plugins.UiBuilderLibrary.Element.Instance;
 
 namespace Oxide.Plugins
 {
-  [Info("UI Builder Library", "BlueBeka", "0.0.2")]
+  [Info("UI Builder Library", "BlueBeka", "0.0.3")]
   [Description("Allows for easily creating complex UIs.")]
   public class UiBuilderLibrary : RustPlugin
   {
