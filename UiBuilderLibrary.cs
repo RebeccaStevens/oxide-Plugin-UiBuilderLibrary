@@ -267,10 +267,10 @@ namespace Oxide.Plugins
     {
       private static readonly List<WeakReference<UI>> AllUis = new List<WeakReference<UI>>();
 
-      public static readonly string FontBold = "robotocondensed-bold.ttf";
-      public static readonly string FontRegular = "robotocondensed-regular.ttf";
-      public static readonly string FontMono = "droidsansmono.ttf";
-      public static readonly string FontMarker = "permanentmarker.ttf";
+      public const string FontBold = "robotocondensed-bold.ttf";
+      public const string FontRegular = "robotocondensed-regular.ttf";
+      public const string FontMono = "droidsansmono.ttf";
+      public const string FontMarker = "permanentmarker.ttf";
 
       private RootElement Root { get; }
 
