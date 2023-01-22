@@ -10,7 +10,7 @@ using System.Runtime.Serialization;
 
 namespace Oxide.Plugins
 {
-  [Info("UI Builder Library", "BlueBeka", "0.0.3")]
+  [Info("UI Builder Library", "BlueBeka", "0.0.4")]
   [Description("Allows for easily creating complex UIs.")]
   public class UiBuilderLibrary : RustPlugin
   {
