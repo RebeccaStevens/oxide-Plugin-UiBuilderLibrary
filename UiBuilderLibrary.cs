@@ -834,6 +834,7 @@ namespace Oxide.Plugins
       public new class Instance : Element.Instance
       {
         public CuiTextComponent Text { get; } = new CuiTextComponent();
+        public CuiOutlineComponent Outline { get; } = new CuiOutlineComponent();
 
         protected internal Func<Instance, bool> Renderer { get; set; }
 
@@ -859,6 +860,9 @@ namespace Oxide.Plugins
             cuiElement.Components.Add(Text);
 
           cuiElement.Components.Add(Bounds.GetCuiComponent());
+
+          if (!string.IsNullOrEmpty(Outline.Color))
+            cuiElement.Components.Add(Outline);
 
           return new CuiElement[] { cuiElement };
         }
