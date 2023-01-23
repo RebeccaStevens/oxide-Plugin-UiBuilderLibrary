@@ -479,7 +479,11 @@ namespace Oxide.Plugins
       /// <param name="updatedElements"></param>
       /// <param name="parentHasUpdates"></param>
       /// <returns>The id of the element instance that was opened.</returns>
-      public abstract string Open(BasePlayer player, Collection<Instance> updatedElements, bool parentHasUpdates);
+      public virtual string Open(BasePlayer player, Collection<Element.Instance> updatedElements, bool parentHasUpdates)
+      {
+        InstanceCache[player.userID].Open(updatedElements, parentHasUpdates);
+        return InstanceCache[player.userID].Id;
+      }
 
       /// <summary>
       /// Close this element for the given player.
@@ -634,6 +638,12 @@ namespace Oxide.Plugins
         Renderer = renderer;
       }
 
+      /// <summary>
+      /// Ensure that an instance of this element exists for the given player.
+      /// </summary>
+      /// <param name="player"></param>
+      /// <param name="renderer"></param>
+      /// <returns></returns>
       public Instance EnsureInstance(BasePlayer player)
       {
         var instance = GetInstance<Instance>(player);
@@ -686,6 +696,12 @@ namespace Oxide.Plugins
       {
       }
 
+      /// <summary>
+      /// Ensure that an instance of this element exists for the given player.
+      /// </summary>
+      /// <param name="player"></param>
+      /// <param name="renderer"></param>
+      /// <returns></returns>
       public Instance EnsureInstance(BasePlayer player, Func<Instance, bool> renderer)
       {
         var instance = GetInstance<Instance>(player);
@@ -698,19 +714,6 @@ namespace Oxide.Plugins
         instance = new Instance(this, player, renderer);
         InstanceCache.Add(player.userID, instance, true);
         return instance;
-      }
-
-      /// <summary>
-      /// Open this element for the given player.
-      /// </summary>
-      /// <param name="player"></param>
-      /// <param name="updatedElements"></param>
-      /// <param name="parentHasUpdates"></param>
-      /// <returns>The id of the element instance that was opened.</returns>
-      public override string Open(BasePlayer player, Collection<Element.Instance> updatedElements, bool parentHasUpdates)
-      {
-        InstanceCache[player.userID].Open(updatedElements, parentHasUpdates);
-        return InstanceCache[player.userID].Id;
       }
 
       public new class Instance : Element.Instance
@@ -816,6 +819,12 @@ namespace Oxide.Plugins
       {
       }
 
+      /// <summary>
+      /// Ensure that an instance of this element exists for the given player.
+      /// </summary>
+      /// <param name="player"></param>
+      /// <param name="renderer"></param>
+      /// <returns></returns>
       public Instance EnsureInstance(BasePlayer player, Func<Instance, bool> renderer)
       {
         var instance = GetInstance<Instance>(player);
@@ -828,19 +837,6 @@ namespace Oxide.Plugins
         instance = new Instance(this, player, renderer);
         InstanceCache.Add(player.userID, instance, true);
         return instance;
-      }
-
-      /// <summary>
-      /// Open this element for the given player.
-      /// </summary>
-      /// <param name="player"></param>
-      /// <param name="updatedElements"></param>
-      /// <param name="parentHasUpdates"></param>
-      /// <returns>The id of the element instance that was opened.</returns>
-      public override string Open(BasePlayer player, Collection<Element.Instance> updatedElements, bool parentHasUpdates)
-      {
-        InstanceCache[player.userID].Open(updatedElements, parentHasUpdates);
-        return InstanceCache[player.userID].Id;
       }
 
       public new class Instance : Element.Instance
@@ -890,6 +886,12 @@ namespace Oxide.Plugins
       {
       }
 
+      /// <summary>
+      /// Ensure that an instance of this element exists for the given player.
+      /// </summary>
+      /// <param name="player"></param>
+      /// <param name="renderer"></param>
+      /// <returns></returns>
       public Instance EnsureInstance(BasePlayer player, Func<Instance, bool> renderer)
       {
         var instance = GetInstance<Instance>(player);
@@ -902,19 +904,6 @@ namespace Oxide.Plugins
         instance = new Instance(this, player, renderer);
         InstanceCache.Add(player.userID, instance, true);
         return instance;
-      }
-
-      /// <summary>
-      /// Open this element for the given player.
-      /// </summary>
-      /// <param name="player"></param>
-      /// <param name="updatedElements"></param>
-      /// <param name="parentHasUpdates"></param>
-      /// <returns>The id of the element instance that was opened.</returns>
-      public override string Open(BasePlayer player, Collection<Element.Instance> updatedElements, bool parentHasUpdates)
-      {
-        InstanceCache[player.userID].Open(updatedElements, parentHasUpdates);
-        return InstanceCache[player.userID].Id;
       }
 
       public new class Instance : Element.Instance
@@ -977,6 +966,12 @@ namespace Oxide.Plugins
       {
       }
 
+      /// <summary>
+      /// Ensure that an instance of this element exists for the given player.
+      /// </summary>
+      /// <param name="player"></param>
+      /// <param name="renderer"></param>
+      /// <returns></returns>
       public Instance EnsureInstance(BasePlayer player, Func<Instance, bool> renderer)
       {
         var instance = GetInstance<Instance>(player);
@@ -989,19 +984,6 @@ namespace Oxide.Plugins
         instance = new Instance(this, player, renderer);
         InstanceCache.Add(player.userID, instance, true);
         return instance;
-      }
-
-      /// <summary>
-      /// Open this element for the given player.
-      /// </summary>
-      /// <param name="player"></param>
-      /// <param name="updatedElements"></param>
-      /// <param name="parentHasUpdates"></param>
-      /// <returns>The id of the element instance that was opened.</returns>
-      public override string Open(BasePlayer player, Collection<Element.Instance> updatedElements, bool parentHasUpdates)
-      {
-        InstanceCache[player.userID].Open(updatedElements, parentHasUpdates);
-        return InstanceCache[player.userID].Id;
       }
 
       public new class Instance : Element.Instance
@@ -1046,6 +1028,12 @@ namespace Oxide.Plugins
       {
       }
 
+      /// <summary>
+      /// Ensure that an instance of this element exists for the given player.
+      /// </summary>
+      /// <param name="player"></param>
+      /// <param name="renderer"></param>
+      /// <returns></returns>
       public Instance EnsureInstance(BasePlayer player, Func<Instance, bool> renderer)
       {
         var instance = GetInstance<Instance>(player);
@@ -1058,19 +1046,6 @@ namespace Oxide.Plugins
         instance = new Instance(this, player, renderer);
         InstanceCache.Add(player.userID, instance, true);
         return instance;
-      }
-
-      /// <summary>
-      /// Open this element for the given player.
-      /// </summary>
-      /// <param name="player"></param>
-      /// <param name="updatedElements"></param>
-      /// <param name="parentHasUpdates"></param>
-      /// <returns>The id of the element instance that was opened.</returns>
-      public override string Open(BasePlayer player, Collection<Element.Instance> updatedElements, bool parentHasUpdates)
-      {
-        InstanceCache[player.userID].Open(updatedElements, parentHasUpdates);
-        return InstanceCache[player.userID].Id;
       }
 
       public new class Instance : Element.Instance
@@ -1114,6 +1089,12 @@ namespace Oxide.Plugins
       {
       }
 
+      /// <summary>
+      /// Ensure that an instance of this element exists for the given player.
+      /// </summary>
+      /// <param name="player"></param>
+      /// <param name="renderer"></param>
+      /// <returns></returns>
       public Instance EnsureInstance(BasePlayer player, Func<Instance, bool> renderer)
       {
         var instance = GetInstance<Instance>(player);
@@ -1126,19 +1107,6 @@ namespace Oxide.Plugins
         instance = new Instance(this, player, renderer);
         InstanceCache.Add(player.userID, instance, true);
         return instance;
-      }
-
-      /// <summary>
-      /// Open this element for the given player.
-      /// </summary>
-      /// <param name="player"></param>
-      /// <param name="updatedElements"></param>
-      /// <param name="parentHasUpdates"></param>
-      /// <returns>The id of the element instance that was opened.</returns>
-      public override string Open(BasePlayer player, Collection<Element.Instance> updatedElements, bool parentHasUpdates)
-      {
-        InstanceCache[player.userID].Open(updatedElements, parentHasUpdates);
-        return InstanceCache[player.userID].Id;
       }
 
       public new class Instance : Element.Instance
@@ -1186,6 +1154,12 @@ namespace Oxide.Plugins
       {
       }
 
+      /// <summary>
+      /// Ensure that an instance of this element exists for the given player.
+      /// </summary>
+      /// <param name="player"></param>
+      /// <param name="renderer"></param>
+      /// <returns></returns>
       public Instance EnsureInstance(BasePlayer player, Func<Instance, bool> renderer)
       {
         var instance = GetInstance<Instance>(player);
@@ -1271,6 +1245,12 @@ namespace Oxide.Plugins
       {
       }
 
+      /// <summary>
+      /// Ensure that an instance of this element exists for the given player.
+      /// </summary>
+      /// <param name="player"></param>
+      /// <param name="renderer"></param>
+      /// <returns></returns>
       public Instance EnsureInstance(BasePlayer player, Func<Instance, bool> renderer)
       {
         var instance = GetInstance<Instance>(player);
@@ -1345,6 +1325,12 @@ namespace Oxide.Plugins
       {
       }
 
+      /// <summary>
+      /// Ensure that an instance of this element exists for the given player.
+      /// </summary>
+      /// <param name="player"></param>
+      /// <param name="renderer"></param>
+      /// <returns></returns>
       public Instance EnsureInstance(BasePlayer player, Func<Instance, bool> renderer)
       {
         var instance = GetInstance<Instance>(player);
@@ -1357,19 +1343,6 @@ namespace Oxide.Plugins
         instance = new Instance(this, player, renderer);
         InstanceCache.Add(player.userID, instance, true);
         return instance;
-      }
-
-      /// <summary>
-      /// Open this element for the given player.
-      /// </summary>
-      /// <param name="player"></param>
-      /// <param name="updatedElements"></param>
-      /// <param name="parentHasUpdates"></param>
-      /// <returns>The id of the element instance that was opened.</returns>
-      public override string Open(BasePlayer player, Collection<Element.Instance> updatedElements, bool parentHasUpdates)
-      {
-        InstanceCache[player.userID].Open(updatedElements, parentHasUpdates);
-        return InstanceCache[player.userID].Id;
       }
 
       public new class Instance : Element.Instance
