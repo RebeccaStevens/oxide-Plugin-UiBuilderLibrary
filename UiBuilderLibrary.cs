@@ -754,54 +754,94 @@ namespace Oxide.Plugins
           return new CuiElement[] { cuiElement };
         }
 
+        /// <summary>
+        /// Add a subpanel to this panel.
+        /// </summary>
+        /// <param name="renderer"></param>
         public void AddPanel(Func<Instance, bool> renderer)
         {
           PanelElement element = Initialized ? AddChild<PanelElement>() : AddChild(new PanelElement(Element));
           element.EnsureInstance(Player, renderer);
         }
 
+        /// <summary>
+        /// Add text to this panel.
+        /// </summary>
+        /// <param name="renderer"></param>
         public void AddLabel(Func<LabelElement.Instance, bool> renderer)
         {
           LabelElement element = Initialized ? AddChild<LabelElement>() : AddChild(new LabelElement(Element));
           element.EnsureInstance(Player, renderer);
         }
 
+        /// <summary>
+        /// Add a button to this panel.
+        /// </summary>
+        /// <param name="renderer"></param>
         public void AddButton(Func<ButtonElement.Instance, bool> renderer)
         {
           ButtonElement element = Initialized ? AddChild<ButtonElement>() : AddChild(new ButtonElement(Element));
           element.EnsureInstance(Player, renderer);
         }
 
+        /// <summary>
+        /// Add an in-game image to this panel.
+        ///
+        /// Use `AddRawImage` to add a custom image.
+        /// </summary>
+        /// <param name="renderer"></param>
         public void AddGameImage(Func<GameImageElement.Instance, bool> renderer)
         {
           GameImageElement element = Initialized ? AddChild<GameImageElement>() : AddChild(new GameImageElement(Element));
           element.EnsureInstance(Player, renderer);
         }
 
+        /// <summary>
+        /// Add a custom image to this panel.
+        /// </summary>
+        /// <param name="renderer"></param>
         public void AddRawImage(Func<RawImageElement.Instance, bool> renderer)
         {
           RawImageElement element = Initialized ? AddChild<RawImageElement>() : AddChild(new RawImageElement(Element));
           element.EnsureInstance(Player, renderer);
         }
 
+        /// <summary>
+        /// Add an input field to this panel.
+        /// </summary>
+        /// <param name="renderer"></param>
         public void AddInputField(Func<InputFieldElement.Instance, bool> renderer)
         {
           InputFieldElement element = Initialized ? AddChild<InputFieldElement>() : AddChild(new InputFieldElement(Element));
           element.EnsureInstance(Player, renderer);
         }
 
+        /// <summary>
+        /// Add a 1D group of buttons to this panel.
+        /// </summary>
+        /// <param name="renderer"></param>
         public void AddTabs(Func<TabsElement.Instance, bool> renderer)
         {
           TabsElement element = Initialized ? AddChild<TabsElement>() : AddChild(new TabsElement(Element));
           element.EnsureInstance(Player, renderer);
         }
 
+        /// <summary>
+        /// Add a 2D group of panel layed out in a grid to this panel.
+        ///
+        /// Be sure to add the correct number of cells (based on row and column count) to this grid.
+        /// </summary>
+        /// <param name="renderer"></param>
         public void AddGrid(Func<GridElement.Instance, bool> renderer)
         {
           GridElement element = Initialized ? AddChild<GridElement>() : AddChild(new GridElement(Element));
           element.EnsureInstance(Player, renderer);
         }
 
+        /// <summary>
+        /// Add a countdown component.
+        /// </summary>
+        /// <param name="renderer"></param>
         public void AddCountdown(Func<CountdownElement.Instance, bool> renderer)
         {
           CountdownElement element = Initialized ? AddChild<CountdownElement>() : AddChild(new CountdownElement(Element));
@@ -1196,6 +1236,10 @@ namespace Oxide.Plugins
           return Renderer(this);
         }
 
+        /// <summary>
+        /// Add a tab (button) to this set of tabs (buttons).
+        /// </summary>
+        /// <param name="renderer"></param>
         public void AddTab(Func<ButtonElement.Instance, bool> renderer)
         {
           if (!Initialized)
@@ -1288,6 +1332,10 @@ namespace Oxide.Plugins
           return Renderer(this);
         }
 
+        /// <summary>
+        /// Add a cell (panel) to this grid.
+        /// </summary>
+        /// <param name="renderer"></param>
         public void AddCell(Func<PanelElement.Instance, bool> renderer)
         {
           AddPanel((cell) =>
