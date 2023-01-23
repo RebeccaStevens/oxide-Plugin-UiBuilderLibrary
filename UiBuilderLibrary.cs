@@ -10,7 +10,7 @@ using System.Runtime.Serialization;
 
 namespace Oxide.Plugins
 {
-  [Info("UI Builder Library", "BlueBeka", "0.0.5")]
+  [Info("UI Builder Library", "BlueBeka", "0.0.6")]
   [Description("Allows for easily creating complex UIs.")]
   public class UiBuilderLibrary : CovalencePlugin
   {
