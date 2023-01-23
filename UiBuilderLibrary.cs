@@ -798,6 +798,12 @@ namespace Oxide.Plugins
           GridElement element = Initialized ? AddChild<GridElement>() : AddChild(new GridElement(Element));
           element.EnsureInstance(Player, renderer);
         }
+
+        public void AddCountdown(Func<CountdownElement.Instance, bool> renderer)
+        {
+          CountdownElement element = Initialized ? AddChild<CountdownElement>() : AddChild(new CountdownElement(Element));
+          element.EnsureInstance(Player, renderer);
+        }
       }
     }
 
@@ -1326,6 +1332,74 @@ namespace Oxide.Plugins
           cell.Bounds.MaxX = offsetX + width;
           cell.Bounds.MinY = 1 - offsetY - height;
           cell.Bounds.MaxY = 1 - offsetY;
+        }
+      }
+    }
+
+    /// <summary>
+    /// A count down.
+    /// </summary>
+    public class CountdownElement : Element
+    {
+      internal CountdownElement(Element parent) : base(parent)
+      {
+      }
+
+      public Instance EnsureInstance(BasePlayer player, Func<Instance, bool> renderer)
+      {
+        var instance = GetInstance<Instance>(player);
+        if (instance != null)
+        {
+          instance.Renderer = renderer;
+          return instance;
+        }
+
+        instance = new Instance(this, player, renderer);
+        InstanceCache.Add(player.userID, instance, true);
+        return instance;
+      }
+
+      /// <summary>
+      /// Open this element for the given player.
+      /// </summary>
+      /// <param name="player"></param>
+      /// <param name="updatedElements"></param>
+      /// <param name="parentHasUpdates"></param>
+      /// <returns>The id of the element instance that was opened.</returns>
+      public override string Open(BasePlayer player, Collection<Element.Instance> updatedElements, bool parentHasUpdates)
+      {
+        InstanceCache[player.userID].Open(updatedElements, parentHasUpdates);
+        return InstanceCache[player.userID].Id;
+      }
+
+      public new class Instance : Element.Instance
+      {
+        public CuiCountdownComponent Countdown { get; } = new CuiCountdownComponent();
+
+        protected internal Func<Instance, bool> Renderer { get; set; }
+
+        internal Instance(Element element, BasePlayer player, Func<Instance, bool> renderer) : base(element, player)
+        {
+          Renderer = renderer;
+        }
+
+        public override bool Render()
+        {
+          return Renderer(this);
+        }
+
+        public override IEnumerable<CuiElement> GetCuiElements()
+        {
+          CuiElement cuiElement = new CuiElement()
+          {
+            Name = Id,
+            Parent = GetParentId(),
+            Components = {
+              Countdown,
+            }
+          };
+
+          return new CuiElement[] { cuiElement };
         }
       }
     }
