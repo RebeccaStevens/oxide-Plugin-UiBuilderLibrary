@@ -196,8 +196,8 @@ Default configuration:
 
 ### Bug Report or Feature Request
 
-Open an issue on [GitHub](https://github.com/RebeccaStevens/uMod-Rust-Plugin-AutoCode/issues/new/choose).
+Open an issue on [GitHub](https://github.com/RebeccaStevens/oxide-Plugin-UiBuilderLibrary/issues/new/choose).
 
 ### Want to contribute
 
-Fork and clone the [GitHub repository](https://github.com/RebeccaStevens/uMod-Rust-Plugin-AutoCode). Send me a PR :)
+Fork and clone the [GitHub repository](https://github.com/RebeccaStevens/oxide-Plugin-UiBuilderLibrary). Send me a PR :)
