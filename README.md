@@ -2,9 +2,6 @@
 
 # Ui Builder Library
 
-[![BSD 3 Clause license](https://img.shields.io/github/license/RebeccaStevens/eslint-config-rebeccastevens.svg?style=flat-square)](https://opensource.org/licenses/BSD-3-Clause)
-[![Commitizen friendly](https://img.shields.io/badge/commitizen-friendly-brightgreen.svg?style=flat-square)](https://commitizen.github.io/cz-cli/)
-
 A Library that allows for easily creating complex UIs in Rust.\
 By itself this plugin doesn't really do anything.
 
