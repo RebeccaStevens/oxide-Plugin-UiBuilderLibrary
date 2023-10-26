@@ -10,7 +10,7 @@ using System.Runtime.Serialization;
 
 namespace Oxide.Plugins
 {
-  [Info("UI Builder Library", "BlueBeka", "0.0.6")]
+  [Info("UI Builder Library", "BlueBeka", "0.0.7")]
   [Description("Allows for easily creating complex UIs.")]
   public class UiBuilderLibrary : CovalencePlugin
   {
@@ -92,7 +92,14 @@ namespace Oxide.Plugins
       /// </summary>
       public void Save()
       {
-        SaveSerializable(Data);
+        if (Data == null)
+        {
+          Load();
+        }
+        else
+        {
+          SaveSerializable(Data);
+        }
       }
 
       /// <summary>
@@ -116,7 +123,7 @@ namespace Oxide.Plugins
       /// </summary>
       private void SaveSerializable<T>(string file, T sData)
       {
-        Plugin.Config.WriteObject(sData, false, string.IsNullOrEmpty(file) ? $"oxide/config/{Plugin.Name}.json" : $"oxide/config/{Plugin.Name}/{file}.json");
+        Plugin.Config.WriteObject(sData, false, GetFilename(file));
       }
 
       /// <summary>
@@ -132,7 +139,18 @@ namespace Oxide.Plugins
       /// </summary>
       private T LoadSerializable<T>(string file)
       {
-        return Plugin.Config.ReadObject<T>(string.IsNullOrEmpty(file) ? $"oxide/config/{Plugin.Name}.json" : $"oxide/config/{Plugin.Name}/{file}.json");
+        var result = Plugin.Config.ReadObject<T>(GetFilename(file));
+        SaveSerializable(file, result);
+
+        return result;
+      }
+
+      /// <summary>
+      /// Get the longer filename path for the file.
+      /// </summary>
+      private string GetFilename(string file)
+      {
+        return string.IsNullOrEmpty(file) ? $"oxide/config/{Plugin.Name}.json" : $"oxide/config/{Plugin.Name}/{file}.json";
       }
 
       /// <summary>
@@ -184,8 +202,6 @@ namespace Oxide.Plugins
       public void Load()
       {
         PlayerData = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<ulong, Structure>>(Filename);
-        if (PlayerData == null)
-          PlayerData = new Dictionary<ulong, Structure>();
       }
     }
 
@@ -207,7 +223,9 @@ namespace Oxide.Plugins
         ScreenAspectRatio = config.Data.DefaultScreenAspectRatio,
       };
       if (store)
+      {
         data.PlayerData[player.userID] = playerData;
+      }
       return playerData;
     }
 
